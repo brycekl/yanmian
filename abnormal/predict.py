@@ -57,7 +57,7 @@ def main():
 
     # init detec model
     detec_model = create_detec_model(num_classes=2)
-    detec_weight = "../../model/detec/data6_SGDlr0.02_0.9169/best_model.pth"
+    detec_weight = "../model/detec/data6_SGDlr0.02_0.9169/best_model.pth"
     assert os.path.exists(detec_weight), "{} file dose not exist.".format(detec_weight)
     detec_model.load_state_dict(torch.load(detec_weight, map_location=device)["model"])
     detec_model.to(device)
@@ -67,7 +67,7 @@ def main():
     # init heatmap model
     # model = UNet(in_channels=3, num_classes=classes + 1, base_c=64)
     heatmap_model = VGG16UNet(num_classes=6)
-    heatmap_weight = "../../model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth"  # 127, 136
+    heatmap_weight = "../model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth"  # 127, 136
     assert os.path.exists(heatmap_weight), f"weights {heatmap_weight} not found."
     heatmap_model.load_state_dict(torch.load(heatmap_weight, map_location='cpu')['model'])
     heatmap_model.to(device)
@@ -75,7 +75,7 @@ def main():
     heatmap_model(init_img)
 
     # init seg model
-    seg_weight = '../../model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/1_0.768/best_model.pth'
+    seg_weight = '../model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/1_0.768/best_model.pth'
     # model_poly_curve = UNet(in_channels=3, num_classes=5, base_c=32)
     # model_poly_curve = VGG16UNet(num_classes=5)
     config_vit = CONFIGS_ViT_seg['R50-ViT-B_16']
@@ -99,7 +99,12 @@ def main():
     img_paths = [{i: os.path.join('./datas', i, j)} for i in labels for j in os.listdir(os.path.join('./datas', i))]
     result_pre = {i: {'name': [], 'IFA': [], 'MNM': [], 'FMA': [], 'FPL': [], 'PL': [], 'MML': [], 'FS': []} for i
                   in labels}
-    spacing_cm = pd.read_excel('../data_information/spa.xlsx').to_dict('list')
+    spacing_cm = pd.read_excel('../data_utils/data_information/spacing_values.xlsx').to_dict('list')
+    spacing_cm['name'] = [i.split('.')[0] for i in spacing_cm['name']]
+
+    save_path = './result_230114'
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
 
     with torch.no_grad():  # 关闭梯度计算功能，测试不需要计算梯度
         for i, data in tqdm(enumerate(img_paths)):
@@ -110,13 +115,15 @@ def main():
             if name in [
                         '0112022_Yumei_Wang_20181224130949650',   # 预测结果不好
                         '5010816_lifang_chang_clp',   # 重复图片
-                        '1_0031_72',   # detection 无结果
+                        '1_0031_72',   # clp detection 无结果
                         '0133204_Qingfeng_Dong_20190719140157679',   # 无法计算指标值
-                        '1_0031_72',
                         ]:
                 continue
 
-            spa = spacing_cm['spa'][spacing_cm['name'].index(name + '.jpg')] * 10
+            if name not in spacing_cm['name']:
+                spa = 1
+            else:
+                spa = spacing_cm['spa'][spacing_cm['name'].index(name)] * 10
             origin_img = Image.open(img_p)
             ori_w, ori_h = origin_img.size
 
@@ -158,7 +165,7 @@ def main():
 
             # model1 预测六个点
             output = heatmap_model(ROI_img.to(device))
-            prediction = output['out'].squeeze().to('cpu')
+            prediction = output.squeeze().to('cpu')
 
             # model2 预测poly_curve
             output2 = seg_model(ROI_img.to(device))
@@ -187,7 +194,7 @@ def main():
                 continue
 
             pre_data, img = calculate_metrics(origin_img, pre_target, not_exist_landmark, is_gt=False, show_img=False,
-                                              compute_MML=True, name=name, save_path='./result_230103/' + label,
+                                              compute_MML=True, name=name, save_path=save_path + '/' + label,
                                               resize_ratio=ratio, spa=spa)
 
             # shutil.copy(img_p, img_p.replace('datas', 'result_1222'))
@@ -208,7 +215,7 @@ def main():
                                                                          round(float(np.mean(data)), 2),
                                                                          round(float(np.std(data)), 2)))
     # dice 误差
-    with pd.ExcelWriter('./result_230103/result_pre.xlsx') as writer:
+    with pd.ExcelWriter(save_path + '/result_pre.xlsx') as writer:
         for i in result_pre:
             df = pd.DataFrame(result_pre[i])
             df.to_excel(writer, sheet_name=i, index=False)
