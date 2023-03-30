@@ -56,7 +56,7 @@ def main():
     # from pil image to tensor and normalize
     data_transform = T.Compose([T.Resize([256]), T.ToTensor(), T.Normalize(mean=mean, std=std)])
     test_data = YanMianDataset(os.getcwd(), transforms=data_transform, data_type='test', resize=[256, 256],
-                               num_classes=4)
+                               num_classes=4, txt_path=test_txt)
     print(len(test_data))
 
     name_index = {8: 'upper_lip', 9: 'under_lip', 10: 'upper_midpoint', 11: 'under_midpoint', 12: 'chin', 13: 'nasion'}
@@ -196,7 +196,11 @@ def main():
                 gt_data, gt_img = calculate_metrics(original_img, target, not_exist_landmark=[], show_img=False,
                                                     resize_ratio=resize_ratio, compute_MML=True, spa=sp_cm, 
                                                     name=img_name, save_path=save_root + '/GT')
-
+                if img_name in ['0110062_Yue_Guo_20170822092632751',
+                                '0115810_Cheng_Zhang_20200909143417688', '0116840_Yongping_Dai_20210203103117950']:
+                    for i in ['IFA', 'MNM', 'FMA', 'PL', 'FS']:
+                        show_one_metric(original_img, target, pre_target, i, not_exist_landmark, spa=sp_cm, box=box,
+                                        resize_ratio=resize_ratio, save_path=f'{save_root}/{img_name}')
                 # save results and predicted images
                 result_pre['name'].append(img_name)
                 result_gt['name'].append(img_name)

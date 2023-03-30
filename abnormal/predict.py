@@ -197,6 +197,10 @@ def main():
                                               compute_MML=True, name=name, save_path=save_path + '/' + label,
                                               resize_ratio=ratio, spa=spa)
 
+            if name in ['2010532_xu_jiangfeng', '0119637_Yan_Cai_20220307083302440', '2411097_HE_HONGZHU']:
+                for i in ['IFA', 'MNM', 'FMA', 'PL', 'FS']:
+                    show_one_metric(origin_img, pre_target, pre_target, i, not_exist_landmark, spa=spa, box=pre_box,
+                                    resize_ratio=ratio, save_path=f'{save_path}/{name}')
             # shutil.copy(img_p, img_p.replace('datas', 'result_1222'))
             result_pre[label]['name'].append(name)
             for key in ['IFA', 'MNM', 'FMA', 'FPL', 'PL', 'MML', 'FS']:

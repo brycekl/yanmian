@@ -113,8 +113,8 @@ def metric_BA(result_pre, result_gt, metric, save_path=None):
     plt.xticks(fontproperties='Times New Roman', size=14)
     plt.yticks(fontproperties='Times New Roman', size=14)
 
-    plt.title('AI group and manual measurement group \n consistency of {}'.format(show_metrics[metric]),
-              fontdict=font1)
+    # plt.title('AI group and manual measurement group \n consistency of {}'.format(show_metrics[metric]),
+    #           fontdict=font1)
 
     if save_path:
         if not os.path.exists(save_path):

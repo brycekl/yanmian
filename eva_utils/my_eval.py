@@ -232,8 +232,10 @@ def show_predict(rgb_img, prediction, classes):
     plt.show()
 
 
-def show_one_metric(rgb_img, gt, pre, metric: str, not_exist_landmark, show_img: bool = False):
-    assert metric in ['IFA', 'MNM', 'FMA', 'PL', 'MML'], "metric must in ['IFA', 'MNM', 'FMA', 'PL', 'MML']"
+def show_one_metric(rgb_img, gt, pre, metric: str, not_exist_landmark, box=None, show_img: bool = False, spa=1,
+                    resize_ratio=1, save_path=None):
+    assert metric in ['IFA', 'MNM', 'FMA', 'PL', 'FS', 'MML'], "metric must in ['IFA', 'MNM', 'FMA', 'PL', 'FS', 'MML']"
+    img_name = os.path.basename(save_path)
     landmark_gt = gt['landmark']
     mask_gt = gt['mask']
     landmark_pre = pre['landmark']
@@ -260,51 +262,72 @@ def show_one_metric(rgb_img, gt, pre, metric: str, not_exist_landmark, show_img:
     img = np.array(rgb_img)
     if metric == 'IFA':
         # 面——下部角 （IFA）  --->求不好 144 238 144 180 238 180  46 139 87
-        data_gt = calculate_IFA(img, mask_gt, 3, not_exist_landmark, nasion_gt, chin_gt, upper_lip_gt, under_lip_gt,
-                                towards_right1, color=(160, 0, 0), color_point=(160, 0, 0), color_area=(160, 0, 0))
+        # data_gt = calculate_IFA(img, mask_gt, 3, not_exist_landmark, nasion_gt, chin_gt, upper_lip_gt, under_lip_gt,
+        #                         towards_right1, color=(160, 0, 0), color_point=(160, 0, 0), color_area=(160, 0, 0))
         data_pre = calculate_IFA(img, mask_pre, 3, not_exist_landmark, nasion_pre, chin_pre, upper_lip_pre,
-                                 under_lip_pre, towards_right2, color=(46, 139, 87), color_point=(46, 139, 87),
-                                 color_area=(46, 139, 87))
+                                 under_lip_pre, towards_right2, color=(173, 255, 47), color_point=(255, 0, 0))
     elif metric == 'MNM':
         # 上颌 10 -鼻根 13 -下颌 11角（MNM角）   ----> 完成
-        data_gt = calculate_MNM(img, not_exist_landmark, nasion_gt, upper_midpoint_gt, under_midpoint_gt,
-                                color=(160, 0, 0), color_point=(160, 0, 0))
+        # data_gt = calculate_MNM(img, not_exist_landmark, nasion_gt, upper_midpoint_gt, under_midpoint_gt,
+        #                         color=(160, 0, 0), color_point=(160, 0, 0))
         data_pre = calculate_MNM(img, not_exist_landmark, nasion_pre, upper_midpoint_pre, under_midpoint_pre,
-                                 color=(46, 139, 87), color_point=(46, 139, 87))
+                                 color=(255, 255, 0), color_point=(255, 0, 0))
     elif metric == 'FMA':
         # 面——上颌角（FMA）    -----> 基本完成
-        data_gt = calculate_FMA(img, mask_gt, 1, not_exist_landmark, upper_lip_gt, chin_gt, towards_right1,
-                                color=(160, 0, 0), color_point=(160, 0, 0), color_area=(160, 0, 0))
+        # data_gt = calculate_FMA(img, mask_gt, 1, not_exist_landmark, upper_lip_gt, chin_gt, towards_right1,
+        #                         color=(160, 0, 0), color_point=(160, 0, 0), color_area=(160, 0, 0))
         data_pre = calculate_FMA(img, mask_pre, 1, not_exist_landmark, upper_lip_pre, chin_pre, towards_right2,
-                                 color=(46, 139, 87), color_point=(46, 139, 87), color_area=(46, 139, 87))
-    elif metric == 'PL' or metric == 'MML':
+                                 color=(255, 250, 205), color_point=(255, 0, 0))
+    elif metric == 'PL' or metric == 'MML' or metric == 'FS':
         MML_img = img.copy()
         # 颜面轮廓线（FPL） & 颜面轮廓（PL）距离     -----> 完成
-        data_gt, _, big_head_point_gt = calculate_PL(img, mask_gt, 4, not_exist_landmark, under_midpoint_gt,
-                                                     nasion_gt, towards_right1, color=(160, 0, 0),
-                                                     color_point=(160, 0, 0), color_area=(160, 0, 0))
+        # data_gt, _, big_head_point_gt = calculate_PL(img, mask_gt, 4, not_exist_landmark, under_midpoint_gt,
+        #                                              nasion_gt, towards_right1, color=(160, 0, 0))
         data_pre, _, big_head_point_pre = calculate_PL(img, mask_pre, 4, not_exist_landmark, under_midpoint_pre,
-                                                       nasion_pre, towards_right2, color=(46, 139, 87),
-                                                       color_point=(46, 139, 87), color_area=(46, 139, 87))
-        if metric == 'MML':
+                                                       nasion_pre, towards_right2, color=(0, 255, 255), color_point=(255, 0, 0))
+        if metric == 'MML' or metric == 'FS':
             img = MML_img
             # 下颌上颌线（MML） & 额前空间（FS）距离     -----> 完成
-            data_gt, _ = calculate_MML(img, mask_gt, 4, not_exist_landmark, under_midpoint_gt, upper_midpoint_gt,
-                                       big_head_point_gt, towards_right1, color=(160, 0, 0), color_point=(160, 0, 0),
-                                       color_area=(160, 0, 0))
+            # data_gt, _ = calculate_MML(img, mask_gt, 4, not_exist_landmark, under_midpoint_gt, upper_midpoint_gt,
+            #                            big_head_point_gt, towards_right1, color=(160, 0, 0), color_point=(160, 0, 0),
+            #                            color_area=(160, 0, 0))
             data_pre, _ = calculate_MML(img, mask_pre, 4, not_exist_landmark, under_midpoint_pre, upper_midpoint_pre,
-                                        big_head_point_pre, towards_right2, color=(46, 139, 87),
-                                        color_point=(46, 139, 87), color_area=(46, 139, 87))
+                                        big_head_point_pre, towards_right2, color=(255, 0, 255), color_point=(255, 0, 0))
+    if metric in ['PL', 'FS']:
+        data_pre = (data_pre / resize_ratio) * spa
+    # 添加掩膜  °： '\u00B0'
+    img[img.shape[0] - 110:img.shape[0] - 60, :250, :] = 0
+    # cv2.putText(img, 'GT: : ' + str(round(data_gt, 2)), [20, img.shape[0] - 80], cv2.FONT_HERSHEY_COMPLEX, 1.0,
+    #             (160, 0, 0), 2)
+    cv2.putText(img, f'{metric}: ' + str(round(data_pre, 2)), [20, img.shape[0] - 75], cv2.FONT_HERSHEY_COMPLEX, 1.0,
+                (0, 255, 0), 2)
+    ind = np.where(img[img.shape[0] - 110:img.shape[0] - 60, :250, 1] != 0)[1].max()
+    if metric not in ['PL', 'FS']:
+        cv2.putText(img, 'o', [ind + 5, img.shape[0] - 88], cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 255, 0), 2)
+    else:
+        cv2.putText(img, 'mm', [ind + 5, img.shape[0] - 75], cv2.FONT_HERSHEY_COMPLEX, 1.0, (0, 255, 0), 2)
+
+    # save or show
+    img = Image.fromarray(img)
+    # 裁剪出ROI区域
+    box_ = {'0110062_Yue_Guo_20170822092632751': [123, 29, 379, 285],
+            '0115810_Cheng_Zhang_20200909143417688': [130, 0, 386, 256],
+            '0116840_Yongping_Dai_20210203103117950': [261, 10, 497, 246],
+            '2010532_xu_jiangfeng': [138, 5, 384, 251],
+            '0110091_Meixia_Zhang_20170901100649778': [263, 82, 499, 318],
+            '0119637_Yan_Cai_20220307083302440': [104, 80, 330, 306],
+            '2411097_HE_HONGZHU': [213, 24, 459, 270]}
+    box = box_[img_name] if img_name in box_ else box
+    if box:
+        img = img.crop(box)
     if show_img:
-        # 添加掩膜  °： '\u00B0'
-        img[img.shape[0] - 110:img.shape[0] - 30, :250, :] = 0
-        cv2.putText(img, 'GT: : ' + str(round(data_gt, 2)), [20, img.shape[0] - 80], cv2.FONT_HERSHEY_COMPLEX, 1.0,
-                    (160, 0, 0), 2)
-        cv2.putText(img, 'Pre: : ' + str(round(data_pre, 2)), [20, img.shape[0] - 45], cv2.FONT_HERSHEY_COMPLEX, 1.0,
-                    (46, 139, 87), 2)
         plt.imshow(img)
         plt.title(metric)
         plt.show()
+    if save_path:
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        img.save(os.path.join(save_path, metric + '.png'))
 
 
 def calculate_metrics(rgb_img, gt, not_exist_landmark, is_gt: bool = True, show_img: bool = False, resize_ratio=1,
@@ -341,18 +364,18 @@ def calculate_metrics(rgb_img, gt, not_exist_landmark, is_gt: bool = True, show_
     angle_IFA = calculate_IFA(img, mask, 3, not_exist_landmark, nasion, chin, upper_lip, under_lip, towards_right1,
                               color=(173, 255, 47))
     # 上颌 10 -鼻根 13 -下颌 11角（MNM角）   ----> 完成
-    angle_MNM = calculate_MNM(img, not_exist_landmark, nasion, upper_midpoint, under_midpoint, color=(255, 215, 0))
+    angle_MNM = calculate_MNM(img, not_exist_landmark, nasion, upper_midpoint, under_midpoint, color=(255, 255, 0))
 
     # 面——上颌角（FMA）    -----> 基本完成
-    angle_FMA = calculate_FMA(img, mask, 1, not_exist_landmark, upper_lip, chin, towards_right1, color=(255, 106, 106))
+    angle_FMA = calculate_FMA(img, mask, 1, not_exist_landmark, upper_lip, chin, towards_right1, color=(255, 250, 205))
 
     # 颜面轮廓线（FPL） & 颜面轮廓（PL）距离     -----> 完成
     PL, FPL, head_point = calculate_PL(img, mask, 4, not_exist_landmark, under_midpoint, nasion, towards_right1,
-                                       color=(0, 191, 255))
+                                       color=(0, 255, 255))
     # 颜面轮廓线（MML） & 颜面轮廓（FS）距离     -----> 完成
     if compute_MML:
         FS, MML = calculate_MML(img, mask, 4, not_exist_landmark, under_midpoint, upper_midpoint, head_point,
-                                towards_right1, color=(155, 48, 255))
+                                towards_right1, color=(255, 0, 255))
     else:
         FS, MML = -1, 0
     data = {'IFA': angle_IFA, 'MNM': angle_MNM, 'FMA': angle_FMA, 'PL': (PL/resize_ratio)*spa, 'FPL': FPL, 'FS': (FS/resize_ratio)*spa, 'MML': MML}
@@ -379,20 +402,20 @@ def calculate_metrics(rgb_img, gt, not_exist_landmark, is_gt: bool = True, show_
         cv2.putText(img, 'o', [ind+5, img.shape[0] - 192], cv2.FONT_HERSHEY_COMPLEX, 0.5,
                     (173, 255, 47), 2)
         cv2.putText(img, 'MNM: ' + str(round(angle_MNM, 2)), [20, img.shape[0] - 145], cv2.FONT_HERSHEY_COMPLEX, 1.0,
-                    (255, 215, 0), 2)
+                    (255, 255, 0), 2)
         ind = np.where(img[img.shape[0]-165:img.shape[0]-145, :250, 0] != 0)[1].max()
         cv2.putText(img, 'o', [ind+5, img.shape[0] - 157], cv2.FONT_HERSHEY_COMPLEX, 0.5,
-                    (255, 215, 0), 2)
+                    (255, 255, 0), 2)
         cv2.putText(img, 'FMA: ' + str(round(angle_FMA, 2)), [20, img.shape[0] - 110], cv2.FONT_HERSHEY_COMPLEX, 1.0,
-                    (255, 106, 106), 2)
+                    (255, 250, 205), 2)
         ind = np.where(img[img.shape[0]-130:img.shape[0]-110, :250, 0] != 0)[1].max()
         cv2.putText(img, 'o', [ind+5, img.shape[0] - 122], cv2.FONT_HERSHEY_COMPLEX, 0.5,
-                    (255, 106, 106), 2)
+                    (255, 250, 205), 2)
         mm_yes = 'mm' if spa != 1 else ''
-        cv2.putText(img, 'PL: ' + str(round(data['PL'], 2)) + mm_yes, [20, img.shape[0] - 75], cv2.FONT_HERSHEY_COMPLEX,
-                    1.0, (0, 191, 255), 2)
-        cv2.putText(img, 'FS: ' + str(round(data['FS'], 2)) + mm_yes, [20, img.shape[0] - 40], cv2.FONT_HERSHEY_COMPLEX,
-                    1.0, (155, 48, 255), 2)
+        cv2.putText(img, 'FS: ' + str(round(data['FS'], 2)) + mm_yes, [20, img.shape[0] - 75], cv2.FONT_HERSHEY_COMPLEX,
+                    1.0, (255, 0, 255), 2)
+        cv2.putText(img, 'PL: ' + str(round(data['PL'], 2)) + mm_yes, [20, img.shape[0] - 40], cv2.FONT_HERSHEY_COMPLEX,
+                    1.0, (0, 255, 255), 2)
     img = Image.fromarray(img)
     if save_path:
         if not os.path.exists(save_path):
