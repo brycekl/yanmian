@@ -1,5 +1,4 @@
 import os
-import shutil
 import time
 import pandas as pd
 from yanMianDataset import YanMianDataset
@@ -9,9 +8,9 @@ from eva_utils import analyze
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from src import VGG16UNet
-from train_utils.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
-from train_utils.vit_seg_modeling import VisionTransformer as ViT_seg
-from train_utils.dice_coefficient_loss import build_target, multiclass_dice_coeff
+from src.TransUNet.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
+from src.TransUNet.vit_seg_modeling import TransUNet as ViT_seg
+from train_utils.dice_coefficient_loss import multiclass_dice_coeff
 
 
 def time_synchronized():
@@ -46,7 +45,7 @@ def main():
     run_env = "/" if '/data/lk' in os.getcwd() else '\\'
     weights_path = 'model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth'
     test_txt = './data_utils/test.txt'
-    save_root = './result/result_500'
+    save_root = './result/result_500___'
     assert os.path.exists(weights_path), f"weights {weights_path} not found."
     assert os.path.exists(test_txt), f'test.txt {test_txt} not found.'
     
@@ -102,7 +101,7 @@ def main():
         if 'R50-ViT-B_16'.find('R50') != -1:
             config_vit.patches.grid = (
                 int(256 / 16), int(256 / 16))
-        model_poly_curve = ViT_seg(config_vit, img_size=256, num_classes=5)
+        model_poly_curve = ViT_seg(config_vit, img_size=[256, 256], num_classes=5)
         # 模型融合
         poly_model_merge = False
         if poly_model_merge:

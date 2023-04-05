@@ -1,22 +1,15 @@
 import os
-import shutil
 import time
 
-import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
-import numpy as np
-import torch
-import cv2
-import json
 
 import torchvision.transforms.functional
-from PIL import Image
 from torchvision.transforms.functional import crop, resize, pad, to_tensor, normalize
-from train_utils.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
-from train_utils.vit_seg_modeling import VisionTransformer as ViT_seg
-from detec_backbone import resnet50_fpn_backbone, MobileNetV2
-from detec_network_files import FasterRCNN, FastRCNNPredictor, AnchorsGenerator
+from src.TransUNet.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
+from src.TransUNet.vit_seg_modeling import TransUNet as ViT_seg
+from detec_backbone import resnet50_fpn_backbone
+from detec_network_files import FasterRCNN
 
 from eva_utils.my_eval import *
 from src import VGG16UNet

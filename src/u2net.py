@@ -223,6 +223,12 @@ def convert_onnx(m, save_path):
                       opset_version=11)
 
 
+u2net_list = {
+    'u2net_lite': u2net_lite(),
+    'u2net_full': u2net_full(),
+}
+
+
 if __name__ == '__main__':
     # n_m = RSU(height=7, in_ch=3, mid_ch=12, out_ch=3)
     # convert_onnx(n_m, "RSU7.onnx")

@@ -1,17 +1,15 @@
 import os
 import time
 
-import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
 
 import torchvision.transforms.functional
-from PIL import Image
-from torchvision.transforms.functional import crop, pad, to_tensor, normalize
-from train_utils.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
-from train_utils.vit_seg_modeling import VisionTransformer as ViT_seg
-from detec_backbone import resnet50_fpn_backbone, MobileNetV2
-from detec_network_files import FasterRCNN, FastRCNNPredictor, AnchorsGenerator
+from torchvision.transforms.functional import pad, to_tensor, normalize
+from src.TransUNet.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
+from src.TransUNet.vit_seg_modeling import TransUNet as ViT_seg
+from detec_backbone import resnet50_fpn_backbone
+from detec_network_files import FasterRCNN
 
 from eva_utils.my_eval import *
 from src import VGG16UNet
@@ -184,7 +182,6 @@ def main():
             for key in ['IFA', 'MNM', 'FMA', 'FPL', 'PL', 'MML', 'FS']:
                 result_pre[key].append(float(pre_data[key]))
 
-    from eva_utils import analyze
     df = pd.DataFrame(result_pre)
     df.to_excel(save_path + '/result_pre_.xlsx')
 

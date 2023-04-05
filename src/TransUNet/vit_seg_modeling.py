@@ -23,14 +23,14 @@ from .vit_seg_modeling_resnet_skip import ResNetV2
 logger = logging.getLogger(__name__)
 
 
-ATTENTION_Q = "MultiHeadDotProductAttention_1/query/"
-ATTENTION_K = "MultiHeadDotProductAttention_1/key/"
-ATTENTION_V = "MultiHeadDotProductAttention_1/value/"
-ATTENTION_OUT = "MultiHeadDotProductAttention_1/out/"
-FC_0 = "MlpBlock_3/Dense_0/"
-FC_1 = "MlpBlock_3/Dense_1/"
-ATTENTION_NORM = "LayerNorm_0/"
-MLP_NORM = "LayerNorm_2/"
+ATTENTION_Q = "MultiHeadDotProductAttention_1/query"
+ATTENTION_K = "MultiHeadDotProductAttention_1/key"
+ATTENTION_V = "MultiHeadDotProductAttention_1/value"
+ATTENTION_OUT = "MultiHeadDotProductAttention_1/out"
+FC_0 = "MlpBlock_3/Dense_0"
+FC_1 = "MlpBlock_3/Dense_1"
+ATTENTION_NORM = "LayerNorm_0"
+MLP_NORM = "LayerNorm_2"
 
 
 def np2th(weights, conv=False):
@@ -126,13 +126,12 @@ class Embeddings(nn.Module):
         super(Embeddings, self).__init__()
         self.hybrid = None
         self.config = config
-        img_size = _pair(img_size)
 
         if config.patches.get("grid") is not None:   # ResNet
             grid_size = config.patches["grid"]
             patch_size = (img_size[0] // 16 // grid_size[0], img_size[1] // 16 // grid_size[1])
             patch_size_real = (patch_size[0] * 16, patch_size[1] * 16)
-            n_patches = (img_size[0] // patch_size_real[0]) * (img_size[1] // patch_size_real[1])  
+            n_patches = (img_size[0] // patch_size_real[0]) * (img_size[1] // patch_size_real[1])
             self.hybrid = True
         else:
             patch_size = _pair(config.patches["size"])
@@ -187,7 +186,7 @@ class Block(nn.Module):
         return x, weights
 
     def load_from(self, weights, n_block):
-        ROOT = f"Transformer/encoderblock_{n_block}/"
+        ROOT = f"Transformer/encoderblock_{n_block}"
         with torch.no_grad():
             query_weight = np2th(weights[pjoin(ROOT, ATTENTION_Q, "kernel")]).view(self.hidden_size, self.hidden_size).t()
             key_weight = np2th(weights[pjoin(ROOT, ATTENTION_K, "kernel")]).view(self.hidden_size, self.hidden_size).t()
@@ -342,10 +341,9 @@ class DecoderCup(nn.Module):
         if self.config.n_skip != 0:
             skip_channels = self.config.skip_channels
             for i in range(4-self.config.n_skip):  # re-select the skip channels according to n_skip
-                skip_channels[3-i]=0
-
+                skip_channels[3-i] = 0
         else:
-            skip_channels=[0,0,0,0]
+            skip_channels = [0] * len(in_channels)
 
         blocks = [
             DecoderBlock(in_ch, out_ch, sk_ch) for in_ch, out_ch, sk_ch in zip(in_channels, out_channels, skip_channels)
@@ -367,9 +365,9 @@ class DecoderCup(nn.Module):
         return x
 
 
-class VisionTransformer(nn.Module):
+class TransUNet(nn.Module):
     def __init__(self, config, img_size=224, num_classes=21843, zero_head=False, vis=False):
-        super(VisionTransformer, self).__init__()
+        super(TransUNet, self).__init__()
         self.num_classes = num_classes
         self.zero_head = zero_head
         self.classifier = config.classifier
@@ -388,7 +386,7 @@ class VisionTransformer(nn.Module):
         x, attn_weights, features = self.transformer(x)  # (B, n_patch, hidden)
         x = self.decoder(x, features)
         logits = self.segmentation_head(x)
-        return {"out": logits}
+        return logits
 
     def load_from(self, weights):
         with torch.no_grad():
