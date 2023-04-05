@@ -45,7 +45,7 @@ def main():
     run_env = "/" if '/data/lk' in os.getcwd() else '\\'
     weights_path = 'model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth'
     test_txt = './data_utils/test.txt'
-    save_root = './result/result_500___'
+    save_root = './result/result_500'
     assert os.path.exists(weights_path), f"weights {weights_path} not found."
     assert os.path.exists(test_txt), f'test.txt {test_txt} not found.'
     
@@ -73,19 +73,7 @@ def main():
     model = VGG16UNet(num_classes=6)
 
     # load weights
-    # 模型融合
-    model_merge = False
-    if model_merge:
-        w_path = ['./model/test_heatmap_lr_b32_ers/3.849_resume_sgdlr0.0005_max10_b8_3.847/best_model.pth',
-                  './model/test_heatmap_lr_b32_ers/3.849_resume_sgdlr0.0005_max10_b8_3.841/best_model.pth']
-        model_weight = torch.load(weights_path, map_location='cpu')['model']
-        for p in w_path:
-            temp_weight = torch.load(p, map_location='cpu')['model']
-            for weight_name in model_weight:
-                model_weight[weight_name] = (model_weight[weight_name] + temp_weight[weight_name]) / 2
-        model.load_state_dict(model_weight)
-    else:
-        model.load_state_dict(torch.load(weights_path, map_location='cpu')['model'])
+    model.load_state_dict(torch.load(weights_path, map_location='cpu')['model'])
     model.to(device)
     model.eval()
 
@@ -103,18 +91,7 @@ def main():
                 int(256 / 16), int(256 / 16))
         model_poly_curve = ViT_seg(config_vit, img_size=[256, 256], num_classes=5)
         # 模型融合
-        poly_model_merge = False
-        if poly_model_merge:
-            p_w_path = ['./model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/2_0.772/best_model.pth']
-            poly_model_weight = torch.load(weights_poly_curve, map_location='cpu')['model']
-            for p in p_w_path:
-                temp_weight = torch.load(p, map_location='cpu')['model']
-                for weight_name in poly_model_weight:
-                    assert weight_name in temp_weight.keys(), '模型不匹配'
-                    poly_model_weight[weight_name] = (poly_model_weight[weight_name] + temp_weight[weight_name]) / 2
-            model_poly_curve.load_state_dict(poly_model_weight)
-        else:
-            model_poly_curve.load_state_dict(torch.load(weights_poly_curve, map_location='cpu')['model'])
+        model_poly_curve.load_state_dict(torch.load(weights_poly_curve, map_location='cpu')['model'])
         model_poly_curve.to(device)
         model_poly_curve.eval()
 
