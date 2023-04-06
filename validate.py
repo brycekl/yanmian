@@ -1,15 +1,15 @@
 import os
 import time
 import pandas as pd
+import torch
+import yaml
 from yanMianDataset import YanMianDataset
 import transforms as T
 from eva_utils.my_eval import *
 from eva_utils import analyze
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from src import VGG16UNet
-from src.TransUNet.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
-from src.TransUNet.vit_seg_modeling import TransUNet as ViT_seg
+from train_utils.init_model_utils import create_model
 from train_utils.dice_coefficient_loss import multiclass_dice_coeff
 
 
@@ -41,59 +41,43 @@ def show_img(img, target, title='', save_path=None):
 
 
 def main():
-    # 运行环境： windows 和 linux
-    run_env = "/" if '/data/lk' in os.getcwd() else '\\'
-    weights_path = 'model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth'
-    test_txt = './data_utils/test.txt'
+    model_path = 'models/unet/unet_var40_3.696_w5_0.804'
     save_root = './result/result_500'
-    assert os.path.exists(weights_path), f"weights {weights_path} not found."
-    assert os.path.exists(test_txt), f'test.txt {test_txt} not found.'
-    
-    # roi_mean std
-    mean = (0.2281, 0.2281, 0.2281)
-    std = (0.2313, 0.2313, 0.2313)
-    # from pil image to tensor and normalize
-    data_transform = T.Compose([T.Resize([256]), T.ToTensor(), T.Normalize(mean=mean, std=std)])
-    test_data = YanMianDataset(os.getcwd(), transforms=data_transform, data_type='test', resize=[256, 256],
-                               num_classes=4, txt_path=test_txt)
-    print(len(test_data))
 
+    # basic messages
     name_index = {8: 'upper_lip', 9: 'under_lip', 10: 'upper_midpoint', 11: 'under_midpoint', 12: 'chin', 13: 'nasion'}
-
     spacing_cm = pd.read_excel('./data_utils/data_information/spacing_values.xlsx')
     spacing_cm = spacing_cm.to_dict('list')
     spacing_cm['name'] = [i.split('.')[0] for i in spacing_cm['name']]
+    with open(os.path.join(model_path, 'config.yml'), 'r') as f:
+        config = yaml.load(f.read(), Loader=yaml.Loader)
+    
+    """ init data """
+    data_transform = T.Compose([
+        T.Resize([256]), T.ToTensor(), T.Normalize(mean=(0.2281, 0.2281, 0.2281), std=(0.2313, 0.2313, 0.2313))])
+    test_data = YanMianDataset('./datas', transforms=data_transform, data_type='test', resize=[256, 256],
+                               num_classes=4, txt_path='./data_utils/test.txt')
+    print(len(test_data))
 
-    # get devices
+    ''' init cuda '''
+    run_env = '/' if '/data/lk' in os.getcwd() else '\\'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("using {} device.".format(device))
+    init_img = torch.zeros((1, config.input_channels, *config.input_size), device=device)
 
-    # load heatmap model
-    # model = UNet(in_channels=3, num_classes=classes + 1, base_c=64)
-    model = VGG16UNet(num_classes=6)
+    # load model
+    model = create_model(model_name=config.model_name, num_classes=config.num_classes, input_size=config.input_size)
+    model.load_state_dict(torch.load(os.path.join(model_path, 'best_model.pth'), map_location='cpu')['model'])
+    model.to(device).eval()
 
-    # load weights
-    model.load_state_dict(torch.load(weights_path, map_location='cpu')['model'])
-    model.to(device)
-    model.eval()
-
-    # load poly model
-    model2 = True
-    if model2:  # './model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/1_0.768/best_model.pth'
-        weights_poly_curve = './model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/1_0.768/best_model.pth'
-        # model_poly_curve = UNet(in_channels=3, num_classes=5, base_c=32)
-        # model_poly_curve = VGG16UNet(num_classes=5)
-        config_vit = CONFIGS_ViT_seg['R50-ViT-B_16']
-        config_vit.n_classes = 5
-        config_vit.n_skip = 3
-        if 'R50-ViT-B_16'.find('R50') != -1:
-            config_vit.patches.grid = (
-                int(256 / 16), int(256 / 16))
-        model_poly_curve = ViT_seg(config_vit, img_size=[256, 256], num_classes=5)
-        # 模型融合
-        model_poly_curve.load_state_dict(torch.load(weights_poly_curve, map_location='cpu')['model'])
-        model_poly_curve.to(device)
-        model_poly_curve.eval()
+    # if model 1poly model
+    model2_path = ''
+    if config.num_classes == 6:
+        with open(os.path.join(model2_path, 'config.yml'), 'r') as f:
+            config2 = yaml.load(f.read(), Loader=yaml.Loader)
+        model2 = create_model(model_name=config2.model_name, num_classes=config2.num_classes, input_size=config2.input_size)
+        model2.load_state_dict(torch.load(os.path.join(model2_path, 'best_model.pth'), map_location='cpu')['model'])
+        model2.to(device).eval()
 
     # begin to test datas
     with torch.no_grad():  # 关闭梯度计算功能，测试不需要计算梯度
@@ -118,9 +102,14 @@ def main():
             # expand batch dimension
             to_pre_img = torch.unsqueeze(to_pre_img, dim=0)
 
-            # heatmap model 预测六个点
+            # predict image
             output = model(to_pre_img.to(device))
             prediction = output.squeeze().to('cpu')
+            if config.num_classes == 6:
+                output2 = model2(to_pre_img.to(device))
+                prediction2 = output2.squeeze().to('cpu')
+                prediction = torch.cat((prediction, prediction2), 0)
+
             # 去除pad的数据
             raw_w, raw_h = ROI_img.shape[-1], ROI_img.shape[1]
             ROI_target['mask'] = ROI_target['mask'][:, :raw_h, :raw_w]
@@ -128,81 +117,75 @@ def main():
 
             # 计算预测数据的landmark 的 mse误差
             mse['name'].append(img_name)
-            for i, data in enumerate(prediction[prediction.shape[0] - 6:]):
+            for i, data in enumerate(prediction[:6]):
                 y, x = np.where(data == data.max())
                 point = ROI_target['landmark'][i + 8]  # label=i+8
                 error = round(math.sqrt(math.pow(x[0] - point[0], 2) + math.pow(y[0] - point[1], 2)), 3)
                 mse[name_index[i + 8]].append(error*sp_cm)
 
-            # poly model 预测poly_curve
-            if model2:
-                output2 = model_poly_curve(to_pre_img.to(device))
-                prediction2 = output2['out'].to('cpu')
-                # 去除Pad的数据
-                prediction2 = prediction2[:, :, :raw_h, :raw_w]
-                # 计算预测的dice
-                dice = multiclass_dice_coeff(torch.nn.functional.softmax(prediction2, dim=1),
-                                             ROI_target['mask'].unsqueeze(0))
-                for i, (k, v) in enumerate(dices.items()):
-                    if k == 'name':
-                        dices['name'].append(img_name)
-                    else:
-                        dices[k].append(float(dice[i-1]))
-                # print(f'dice:{dice:.3f}')
+            # 计算预测的dice
+            dice = multiclass_dice_coeff(torch.nn.functional.softmax(prediction[6:].unsqueeze(0), dim=1),
+                                         ROI_target['mask'].unsqueeze(0))
+            for i, (k, v) in enumerate(dices.items()):
+                if k == 'name':
+                    dices['name'].append(img_name)
+                else:
+                    dices[k].append(float(dice[i-1]))
+            # print(f'dice:{dice:.3f}')
 
-                # 生成预测数据的统一格式的target{'landmark':landmark,'mask':mask}
-                prediction = torch.cat((prediction2.squeeze(), prediction), dim=0)
-                pre_ROI_target, not_exist_landmark = create_predict_target(ROI_img, prediction, json_dir,
-                                                                           towards_right=towards_right, deal_pre=True)
+            # 生成预测数据的统一格式的target{'landmark':landmark,'mask':mask}
+            prediction = torch.cat((prediction2.squeeze(), prediction), dim=0)
+            pre_ROI_target, not_exist_landmark = create_predict_target(ROI_img, prediction, json_dir,
+                                                                       towards_right=towards_right, deal_pre=True)
 
-                # 将ROI target 转换为原图大小
-                target = create_origin_target(ROI_target, box, original_img.size)
-                pre_target = create_origin_target(pre_ROI_target, box, original_img.size)
+            # 将ROI target 转换为原图大小
+            target = create_origin_target(ROI_target, box, original_img.size)
+            pre_target = create_origin_target(pre_ROI_target, box, original_img.size)
 
-                if len(not_exist_landmark) > 0:
-                    print(not_exist_landmark)
-                    show_img(original_img, pre_target)
-                # 分指标展示'IFA', 'MNM', 'FMA', 'PL', 'MML'
-                # for metric in ['IFA', 'MNM', 'FMA', 'PL', 'MML']:
-                #     show_one_metric(original_img, target, pre_target, metric, not_exist_landmark, show_img=True)
-                # 计算颜面的各个指标
-                pre_data, pre_img = calculate_metrics(original_img, pre_target, not_exist_landmark, is_gt=False,
-                                                      resize_ratio=resize_ratio,  show_img=False, compute_MML=True,
-                                                      spa=sp_cm, name=img_name, save_path=save_root + '/PRE')
-                gt_data, gt_img = calculate_metrics(original_img, target, not_exist_landmark=[], show_img=False,
-                                                    resize_ratio=resize_ratio, compute_MML=True, spa=sp_cm, 
-                                                    name=img_name, save_path=save_root + '/GT')
-                if img_name in ['0110062_Yue_Guo_20170822092632751',
-                                '0115810_Cheng_Zhang_20200909143417688', '0116840_Yongping_Dai_20210203103117950']:
-                    for i in ['IFA', 'MNM', 'FMA', 'PL', 'FS']:
-                        show_one_metric(original_img, target, pre_target, i, not_exist_landmark, spa=sp_cm, box=box,
-                                        resize_ratio=resize_ratio, save_path=f'{save_root}/{img_name}')
-                # save results and predicted images
-                result_pre['name'].append(img_name)
-                result_gt['name'].append(img_name)
-                for key in ['IFA', 'MNM', 'FMA', 'FPL', 'PL', 'MML', 'FS']:
-                    errorkey = ''
-                    result_pre[key].append(pre_data[key])
-                    result_gt[key].append(gt_data[key])
-                    if pre_data[key] != 'not' and gt_data[key] != 'not':
-                        error = round(gt_data[key] - pre_data[key], 3)
-                    if key == 'IFA' and (error > 13.41 or error < -11.75):
-                        errorkey = 'IFA'
-                    if key == 'MNM' and (error > 4.41 or error < -3.45):
-                        errorkey = 'MNM'
-                    if key == 'FMA' and (error > 10.98 or error < -10.75):
-                        errorkey = 'FMA'
-                    if key == 'PL' and (error > 0.8 or error < -0.7):
-                        errorkey = 'PL'
-                    if key == 'FS' and (error > 2.0 or error < -2.0):
-                        errorkey = 'FS'
-                    if len(errorkey) > 0:
-                        save_error_path = save_root + '/error'
-                        save_error_path_ = os.path.join(save_error_path, errorkey)
-                        if not os.path.exists(os.path.join(save_error_path, errorkey)):
-                            os.makedirs(save_error_path_)
-                        pre_img.save(os.path.join(save_error_path_, img_name + '_pre_' + str(float(error)) + '.png'))
-                        gt_img.save(os.path.join(save_error_path_, img_name + '_gt_' + str(float(error)) + '.png'))
+            if len(not_exist_landmark) > 0:
+                print(not_exist_landmark)
+                show_img(original_img, pre_target)
+            # 分指标展示'IFA', 'MNM', 'FMA', 'PL', 'MML'
+            # for metric in ['IFA', 'MNM', 'FMA', 'PL', 'MML']:
+            #     show_one_metric(original_img, target, pre_target, metric, not_exist_landmark, show_img=True)
+            # 计算颜面的各个指标
+            pre_data, pre_img = calculate_metrics(original_img, pre_target, not_exist_landmark, is_gt=False,
+                                                  resize_ratio=resize_ratio,  show_img=False, compute_MML=True,
+                                                  spa=sp_cm, name=img_name, save_path=save_root + '/PRE')
+            gt_data, gt_img = calculate_metrics(original_img, target, not_exist_landmark=[], show_img=False,
+                                                resize_ratio=resize_ratio, compute_MML=True, spa=sp_cm,
+                                                name=img_name, save_path=save_root + '/GT')
+            if img_name in ['0110062_Yue_Guo_20170822092632751',
+                            '0115810_Cheng_Zhang_20200909143417688', '0116840_Yongping_Dai_20210203103117950']:
+                for i in ['IFA', 'MNM', 'FMA', 'PL', 'FS']:
+                    show_one_metric(original_img, target, pre_target, i, not_exist_landmark, spa=sp_cm, box=box,
+                                    resize_ratio=resize_ratio, save_path=f'{save_root}/{img_name}')
+            # save results and predicted images
+            result_pre['name'].append(img_name)
+            result_gt['name'].append(img_name)
+            for key in ['IFA', 'MNM', 'FMA', 'FPL', 'PL', 'MML', 'FS']:
+                errorkey = ''
+                result_pre[key].append(pre_data[key])
+                result_gt[key].append(gt_data[key])
+                if pre_data[key] != 'not' and gt_data[key] != 'not':
+                    error = round(gt_data[key] - pre_data[key], 3)
+                if key == 'IFA' and (error > 13.41 or error < -11.75):
+                    errorkey = 'IFA'
+                if key == 'MNM' and (error > 4.41 or error < -3.45):
+                    errorkey = 'MNM'
+                if key == 'FMA' and (error > 10.98 or error < -10.75):
+                    errorkey = 'FMA'
+                if key == 'PL' and (error > 0.8 or error < -0.7):
+                    errorkey = 'PL'
+                if key == 'FS' and (error > 2.0 or error < -2.0):
+                    errorkey = 'FS'
+                if len(errorkey) > 0:
+                    save_error_path = save_root + '/error'
+                    save_error_path_ = os.path.join(save_error_path, errorkey)
+                    if not os.path.exists(os.path.join(save_error_path, errorkey)):
+                        os.makedirs(save_error_path_)
+                    pre_img.save(os.path.join(save_error_path_, img_name + '_pre_' + str(float(error)) + '.png'))
+                    gt_img.save(os.path.join(save_error_path_, img_name + '_gt_' + str(float(error)) + '.png'))
 
     # 评估 mse误差   var100_mse_Rightcrop最佳
     for i in mse:
