@@ -76,11 +76,7 @@ def main(args):
     std = (0.2313, 0.2313, 0.2313)
 
     model_name = args.model_name
-    output_dir = args.ouput_dir
-    # args.lr = lr
-
-    if output_dir:
-        mkdir(output_dir)
+    output_dir = args.output_dir
 
     # 用来保存coco_info的文件
     # name = output_dir.split('/')[-1]
@@ -137,7 +133,8 @@ def main(args):
     scaler = torch.cuda.amp.GradScaler() if args.amp else None
 
     # 创建学习率更新策略，这里是每个step更新一次(不是每个epoch)
-    lr_scheduler = create_lr_scheduler(optimizer, len(train_data_loader), args.epochs, warmup=True)
+    lr_scheduler = create_lr_scheduler(optimizer, args.epochs, lr_name=args.scheduler, milestones=args.lr_milestones,
+                                       gamma=args.lr_gamma)
 
     # 如果传入resume参数，即上次训练的权重地址，则接着上次的参数训练
     if args.resume:
@@ -179,8 +176,8 @@ def main(args):
         if epoch == 0 and args.resume:
             evaluate(model, val_data_loader, device=device, num_classes=num_classes)
         mean_loss, lr = train_one_epoch(model, optimizer, train_data_loader, device, epoch, num_classes,
-                                        weight=weight,
-                                        lr_scheduler=lr_scheduler, print_freq=args.print_freq, scaler=scaler)
+                                        weight=weight, print_freq=args.print_freq, scaler=scaler)
+        lr_scheduler.step()
         val_loss, val_mse = evaluate(model, val_data_loader, device=device, num_classes=num_classes, weight=weight)
 
         # 根据验证结果，求得平均指标，并判断是否需要保存模型
@@ -332,7 +329,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_dir', default='./models', help='path where to save')
     parser.add_argument('--model_name', default='R50-ViT-B_16', help='the model name')
     parser.add_argument('--heatmap_shrink_rate', default=1, type=int)  # hrnet最后没有复原为原图大小
-    parser.add_argument('-b', '--batch_size', default=8, type=int,
+    parser.add_argument('-b', '--batch_size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
 
     '''model setting'''
@@ -386,9 +383,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 如果指定了保存文件地址，检查文件夹是否存在，若不存在，则创建
-    args.output_dir = os.path.join(args.output_dir, args.model_name)
-    # if args.output_dir:
-    #     mkdir(args.output_dir)
+    args.output_dir = os.path.join(args.output_dir, args.model_name, args.model_name)
+    if args.output_dir:
+        mkdir(args.output_dir)
 
     # 写入文件
     with open(os.path.join(args.output_dir, 'config.yml'), 'w') as f:

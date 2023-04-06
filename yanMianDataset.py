@@ -25,7 +25,7 @@ class YanMianDataset(Dataset):
         self.var = var
         self.data_type = data_type
         self.num_classes = num_classes
-        self.run_env = '/' if '/data/lk' in os.getcwd() else '\\'
+        self.run_env = '/' if '/data' in os.getcwd() else '\\'
 
         # read txt file and save all json file list (train/val/test)
         if json_path is None:

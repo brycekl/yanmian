@@ -6,6 +6,7 @@ from torch import nn
 
 import train_utils.distributed_utils as utils
 from .dice_coefficient_loss import dice_loss
+from train_utils.init_model_utils import warmup_lr_scheduler
 
 
 def criterion(inputs, target, num_classes: int = 2, ignore_index: int = -100, weight=1):
@@ -96,13 +97,18 @@ def evaluate(model, data_loader, device, num_classes, weight=1):
     return loss, {'mse_total': mse, 'mse_classes': m_mse}
 
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, num_classes, lr_scheduler, print_freq=10,
+def train_one_epoch(model, optimizer, data_loader, device, epoch, num_classes, warmup=True, print_freq=10,
                     scaler=None, weight=1):
     model.train()
     # MetricLogger 度量记录器 :为了统计各项数据，通过调用来使用或显示各项指标，通过具体项目自定义的函数
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
+
+    lr_scheduler = None
+    if epoch == 0 and warmup is True:  # 当训练第一轮（epoch=0）时，启用warmup训练方式，可理解为热身训练
+        warmup_iters = min(1000, len(data_loader) - 1)
+        lr_scheduler = warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor=1.0 / 1000)
 
     # 每次遍历一个iteration
     for image, target in metric_logger.log_every(data_loader, print_freq, header):
@@ -140,9 +146,10 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, num_classes, l
             back_loss.backward()
             optimizer.step()
 
-        lr_scheduler.step()
-
+        if lr_scheduler is not None:  # 第一轮使用warmup训练方式
+            lr_scheduler.step()
         lr = optimizer.param_groups[0]["lr"]
+
         metric_logger.update(lr=lr)
         if num_classes == 6 or num_classes == 10:
             metric_logger.update(mse_loss=loss['mse_loss'].item())
@@ -157,30 +164,3 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, num_classes, l
     return return_loss, lr
 
 
-def create_lr_scheduler(optimizer,
-                        num_step: int,
-                        epochs: int,
-                        warmup=True,
-                        warmup_epochs=1,
-                        warmup_factor=1e-3):
-    assert num_step > 0 and epochs > 0
-    if warmup is False:
-        warmup_epochs = 0
-
-    def f(x):
-        """
-        根据step数返回一个学习率倍率因子，
-        注意在训练开始之前，pytorch会提前调用一次lr_scheduler.step()方法
-        """
-        if warmup is True and x <= (warmup_epochs * num_step):
-            alpha = float(x) / (warmup_epochs * num_step)
-            # warmup过程中lr倍率因子从warmup_factor -> 1
-            return warmup_factor * (1 - alpha) + alpha
-        else:
-            # warmup后lr倍率因子从1 -> 0
-            # 参考deeplab_v2: Learning rate policy
-            # if x % num_step < 3:
-            #     return 1
-            return (1 - (x - warmup_epochs * num_step) / ((epochs - warmup_epochs) * num_step)) ** 0.9
-
-    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=f)

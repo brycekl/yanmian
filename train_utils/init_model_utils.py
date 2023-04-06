@@ -23,8 +23,8 @@ def create_lr_scheduler(optimizer,
         return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, lr_config['T_max'])
     elif lr_name == 'my_lr':
         # 每个epoch lr 都会减小
-        return torch.optim.lr_scheduler.LambdaLR(optimizer,
-                                     lr_lambda=lambda epoch: (1-(epoch-warmup_epochs)/(epochs-warmup_epochs)) ** 0.9)
+        return torch.optim.lr_scheduler.LambdaLR(
+            optimizer, lr_lambda=lambda epoch: (1-(epoch-warmup_epochs)/(epochs-warmup_epochs)) ** 0.9)
 
 
 def warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor):
