@@ -14,29 +14,17 @@ def criterion(inputs, target, num_classes: int = 2, ignore_index: int = -100, we
 
     # 忽略target中值为255的像素，255的像素是目标边缘或者padding填充
     # 交叉熵损失：在通道方向softmax后，根据x的值计算
-    if num_classes == 2:
-        # 设置cross_entropy中背景和前景的loss权重(根据自己的数据集进行设置)
-        # 类别越少，为了平衡，可以设置更大的权重
-        loss_weight = torch.as_tensor([1.0, 2.0], device=target.device)
-    elif num_classes == 5:
-        temp_index = [torch.where(target == i) for i in range(5)]
-        index_total = target.shape[0] * target.shape[1] * target.shape[2]
-        loss_weight = torch.as_tensor([index_total / (i[0].shape[0]) for i in temp_index])
-        loss_weight = [float(i / loss_weight.max()) for i in loss_weight]  #
-        loss_weight = torch.as_tensor(loss_weight, device=target.device)
-    else:
-        loss_weight = None
     # loss = nn.functional.cross_entropy(x, target, ignore_index=ignore_index, weight=loss_weight)  # 函数式API
 
-    if num_classes == 10 or num_classes == 4:
+    if num_classes == 11 or num_classes == 5:
         # 针对每个类别，背景，前景都需要计算他的dice系数
         # 根据gt构建每个类别的矩阵
         # dice_target = build_target(target, num_classes, ignore_index)  # B * C* H * W
         # 计算两区域和两曲线的dice
-        class_index = 0 if num_classes == 4 else 6
+        class_index = 0 if num_classes == 5 else 6
         losses['dice_loss'] += (dice_loss(inputs[:, class_index:, :], target[:, class_index:, :], multiclass=True,
                                           ignore_index=ignore_index))
-    if num_classes == 10 or num_classes == 6:
+    if num_classes == 11 or num_classes == 6:
         if ignore_index > 0:
             roi_mask = torch.ne(target[:, :6, :], ignore_index)
             pre = inputs[:, :6, :][roi_mask]
@@ -71,7 +59,7 @@ def evaluate(model, data_loader, device, num_classes, weight=1):
 
             # 计算 loss 和 metric
             # 点定位计算mse loss 和 mse 的metric； 分割计算dice
-            if num_classes == 10 or num_classes == 6:
+            if num_classes == 11 or num_classes == 6:
                 mask = target['mask'].to(output.device)
                 roi_mask = torch.ne(mask[:, :6, :], 255)
                 pre = output[:, :6, :][roi_mask]
@@ -83,14 +71,14 @@ def evaluate(model, data_loader, device, num_classes, weight=1):
                     y, x = np.where(data == data.max())
                     point = target['landmark'][0][i + 8]  # label=i+8
                     mse[i + 8].append(math.sqrt(math.pow(x[0] - point[0], 2) + math.pow(y[0] - point[1], 2)))
-            if num_classes == 10:
+            if num_classes == 11:
                 loss['dice_loss'] += (dice_loss(output[:, 6:, :], mask[:, 6:, :], multiclass=True, ignore_index=255))
-            if num_classes == 4:
+            if num_classes == 5:
                 loss['dice_loss'] += (dice_loss(output, mask, multiclass=True, ignore_index=255))
 
     loss = {i: j / len(data_loader) for i, j in loss.items()}
     m_mse = []
-    if num_classes == 10 or num_classes == 6:
+    if num_classes == 11 or num_classes == 6:
         m_mse = {i: np.average(j) for i, j in mse.items()}
         for i in m_mse:
             print(f'{i} : {m_mse[i]:.3f}')
@@ -151,15 +139,15 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, num_classes, w
         lr = optimizer.param_groups[0]["lr"]
 
         metric_logger.update(lr=lr)
-        if num_classes == 6 or num_classes == 10:
+        if num_classes == 6 or num_classes == 11:
             metric_logger.update(mse_loss=loss['mse_loss'].item())
-        if num_classes == 4 or num_classes == 10:
+        if num_classes == 5 or num_classes == 11:
             metric_logger.update(dice_loss=loss['dice_loss'].item())
 
     return_loss = {}
-    if num_classes == 6 or num_classes == 10:
+    if num_classes == 6 or num_classes == 11:
         return_loss['mse_loss'] = metric_logger.meters["mse_loss"].global_avg
-    if num_classes == 4 or num_classes == 10:
+    if num_classes == 5 or num_classes == 11:
         return_loss['dice_loss'] = metric_logger.meters["dice_loss"].global_avg
     return return_loss, lr
 

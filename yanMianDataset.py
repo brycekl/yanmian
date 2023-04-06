@@ -17,7 +17,7 @@ class YanMianDataset(Dataset):
     def __init__(self, root: str, transforms=None, data_type: str = 'train', resize=None, ki=-1, k=5, json_path=None,
                  mask_path=None, txt_path=None, num_classes=6, var=1):
         assert data_type in ['train', 'val', 'test'], "data_type must be in ['train', 'val', 'test']"
-        assert num_classes in [4, 6, 10]
+        assert num_classes in [5, 6, 11]
         self.root = root
         self.transforms = transforms
         self.resize = resize
@@ -134,18 +134,17 @@ class YanMianDataset(Dataset):
 
         # 生成mask, landmark的误差在int()处
         landmark = {i: [int(target['landmark'][i][0]), int(target['landmark'][i][1])] for i in target['landmark']}
-        num_mask = self.num_classes if self.num_classes == 6 else self.num_classes + 1
-        mask = torch.zeros(num_mask, *roi_img.shape[-2:], dtype=torch.float)
+        mask = torch.zeros(self.num_classes, *roi_img.shape[-2:], dtype=torch.float)
         # 根据landmark 绘制高斯热图 （进行点分割）
         # heatmap 维度为 c,h,w 因为ToTensor会将Image(c.w,h)也变为(c,h,w)
-        if self.num_classes == 6 or self.num_classes == 10:
+        if self.num_classes == 6 or self.num_classes == 11:
             for label in landmark:
                 point = landmark[label]
                 temp_heatmap = make_2d_heatmap(point, roi_img.shape[-2:], var=self.var, max_value=8)
                 mask[label - 8] = temp_heatmap
         # todo 优化，poly的信息可以集中在一个通道里，求loss时用one hot分离
-        if self.num_classes == 4 or self.num_classes == 10:
-            num_poly_mask = self.num_classes - 4
+        if self.num_classes == 5 or self.num_classes == 11:
+            num_poly_mask = self.num_classes - 5
             poly = np.array(target['mask'])
             for label in range(1, 5):
                 label_mask = poly == label

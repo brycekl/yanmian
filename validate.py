@@ -56,7 +56,7 @@ def main():
     data_transform = T.Compose([
         T.Resize([256]), T.ToTensor(), T.Normalize(mean=(0.2281, 0.2281, 0.2281), std=(0.2313, 0.2313, 0.2313))])
     test_data = YanMianDataset('./datas', transforms=data_transform, data_type='test', resize=[256, 256],
-                               num_classes=4, txt_path='./data_utils/test.txt')
+                               num_classes=5, txt_path='./data_utils/test.txt')
     print(len(test_data))
 
     ''' init cuda '''
