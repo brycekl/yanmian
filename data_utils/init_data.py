@@ -59,7 +59,7 @@ def check_data(curve, landmark, poly_points, json_dir, data_type, detele_file=Fa
     check_poly = {4: False, 5: False}
     check_curve = {6: False, 7: False}
     for i in curve:  # 已去除短的曲线
-        check_curve[i['Label']] = True
+        check_curve[i] = True
     for i in poly_points:
         if len(i['Points']) >= 5:
             check_poly[i['labelType']] = True
