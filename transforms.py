@@ -76,6 +76,7 @@ class RandomResize(object):
         target['mask'] = F.to_pil_image(mask)
         target['curve'] = curve
         target['resize_ratio'] = ratio
+        target['roi_box'] = [int(i * ratio) for i in target['roi_box']]
 
         return image, target
 
@@ -134,6 +135,8 @@ class CenterCrop(object):
 
 class ToTensor(object):
     def __call__(self, image, target):
+        if target['data_type'] == 'test':
+            target['show_img'] = image
         image = F.to_tensor(image)
         target['mask'] = torch.as_tensor(np.array(target['mask']), dtype=torch.int64)
         return image, target
@@ -238,6 +241,7 @@ class GetROI(object):
             bottom = bottom if bottom < img_h else img_h
             height = bottom - top
             width = right - left
+            target['roi_box'] = [left, top, right, bottom]
         # 测试集，使用detec module预测得到的roi box
         else:
             box = target['roi_box']
@@ -245,23 +249,24 @@ class GetROI(object):
             assert left >= 0 and top >= 0 and right <= img_w and bottom <= img_h
             height, width = bottom - top, right - left
 
-        roi_img = F.crop(img, top, left, height, width)
-        roi_mask = F.crop(mask, top, left, height, width)
-        roi_landmark = {i: [j[0] - left, j[1] - top] for i, j in landmark.items()}
-        roi_curve = {i: [[j[0] - left, j[1] - top] for j in target['curve'][i]] for i in target['curve']}
-        return roi_img, roi_mask, roi_landmark, roi_curve, [left, top, right, bottom]
+        img = F.crop(img, top, left, height, width)
+        target['mask'] = F.crop(mask, top, left, height, width)
+        target['landmark'] = {i: [j[0] - left, j[1] - top] for i, j in landmark.items()}
+        target['curve'] = {i: [[j[0] - left, j[1] - top] for j in target['curve'][i]] for i in target['curve']}
+        return img, target
 
 
 class MyPad(object):
     def __init__(self, size):
         self.size = size
 
-    def __call__(self, img, mask, landmark, data_type):
+    def __call__(self, img, target):
+        data_type = target['data_type']
         h, w = img.shape[-2:]
         w_pad, h_pad = 256 - w, 256 - h
         if data_type == 'val':
             pad_size = [w_pad // 2, h_pad // 2, w_pad - w_pad // 2, h_pad - h_pad // 2]
-            landmark = {i: [j[0] + w_pad // 2, j[1] + h_pad // 2] for i, j in landmark.items()}
+            target['landmark'] = {i: [j[0] + w_pad // 2, j[1] + h_pad // 2] for i, j in target['landmark'].items()}
         elif data_type == 'test':
             pad_size = [0, 0, w_pad, h_pad]
         else:  # train 可以用各种填充方式
@@ -271,11 +276,11 @@ class MyPad(object):
             else:
                 w_pad_r, h_pad_r = int(w_pad / 2), int(h_pad / 2)
             pad_size = [w_pad_r, h_pad_r, w_pad - w_pad_r, h_pad - h_pad_r]
-            landmark = {i: [j[0] + w_pad_r, j[1] + h_pad_r] for i, j in landmark.items()}
+            target['landmark'] = {i: [j[0] + w_pad_r, j[1] + h_pad_r] for i, j in target['landmark'].items()}
 
         img = F.pad(img, pad_size, fill=0)
-        mask = F.pad(mask, pad_size, fill=255)
-        return img, mask, landmark
+        target['mask'] = F.pad(target['mask'], pad_size, fill=255)
+        return img, target
 
 
 class RandomRotation(object):

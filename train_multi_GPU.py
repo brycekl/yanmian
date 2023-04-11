@@ -27,12 +27,14 @@ class SegmentationPresetTrain:
         # if hflip_prob > 0:
         #     trans.append(T.RandomHorizontalFlip(hflip_prob))
         trans.extend([
+            T.GetROI(border_size=30),
             T.RandomResize(min_size, max_size, resize_ratio=1, shrink_ratio=1),
             T.RandomHorizontalFlip(0.5),
             T.RandomVerticalFlip(0.5),
             # T.RandomRotation(10, rotate_ratio=0.7, expand_ratio=0.7),
             T.ToTensor(),
             T.Normalize(mean=mean, std=std),
+            T.MyPad(size=256),
         ])
 
         self.transforms = T.Compose(trans)
@@ -44,9 +46,11 @@ class SegmentationPresetTrain:
 class SegmentationPresetEval:
     def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
         self.transforms = T.Compose([
+            T.GetROI(border_size=30),
             T.Resize([256]),
             T.ToTensor(),
             T.Normalize(mean=mean, std=std),
+            T.MyPad(size=256),
         ])
 
     def __call__(self, img, target):
@@ -124,7 +128,7 @@ def main(args):
     params_to_optimize = [p for p in model_without_ddp.parameters() if p.requires_grad]
 
     # optimizer = torch.optim.SGD(params_to_optimize, momentum=args.momentum, weight_decay=args.weight_decay)
-    optimizer = torch.optim.Adam(params_to_optimize, weight_decay=args.weight_decay)  # lr = 2e-4
+    optimizer = torch.optim.Adam(params_to_optimize, lr=args.lr, weight_decay=args.weight_decay)  # lr = 2e-4
     # optimizer = torch.optim.NAdam(params_to_optimize, weight_decay=args.weight_decay)
 
     scaler = torch.cuda.amp.GradScaler() if args.amp else None
@@ -350,8 +354,8 @@ if __name__ == "__main__":
                         choices=['CosineAnnealingLR', 'ReduceLROnPlateau', 'MultiStepLR', 'ConstantLR', 'my_lr'])
     # 针对torch.optim.lr_scheduler.MultiStepLR的参数
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
-    parser.add_argument('--epochs', default=210, type=int, metavar='N', help='number of total epochs to run')
-    parser.add_argument('--lr-milestones', default=[170, 200], nargs='+', type=int,
+    parser.add_argument('--epochs', default=150, type=int, metavar='N', help='number of total epochs to run')
+    parser.add_argument('--lr-milestones', default=[100, 130], nargs='+', type=int,
                         help='decrease lr every step-size epochs')
     parser.add_argument('--lr-gamma', default=0.1, type=float, help='decrease lr by a factor of lr-gamma')
     parser.add_argument('--min_lr', default=1e-5, type=float,
