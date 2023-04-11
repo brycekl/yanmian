@@ -43,7 +43,7 @@ def create_GTmask(target, hm_max=8):
     landmark = target['landmark']
     num_classes = target['num_classes']
     # 生成mask, landmark的误差在int()处
-    landmark = {i: [int(landmark[i][0]), int(landmark[i][1])] for i in landmark}
+    landmark = {i: [int(landmark[i][0]+0.5), int(landmark[i][1]+0.5)] for i in landmark}
     mask = torch.zeros(num_classes, *target['mask'].shape, dtype=torch.float)
     # 根据landmark 绘制高斯热图 （进行点分割）
     # heatmap 维度为 c,h,w 因为ToTensor会将Image(c.w,h)也变为(c,h,w)

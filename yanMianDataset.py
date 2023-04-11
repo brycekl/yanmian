@@ -59,6 +59,8 @@ class YanMianDataset(Dataset):
         assert len(self.json_list) > 0, 'in "{}" file does not find any information'.format(data_type + '.txt')
         for json_dir in self.json_list:
             assert os.path.exists(json_dir), 'not found "{}" file'.format(json_dir)
+        if self.run_env == '\\':
+            self.json_list = [i.replace('\\jsons\\', '/jsons/') for i in self.json_list]
 
     def __len__(self):
         return len(self.json_list)
@@ -91,7 +93,7 @@ class YanMianDataset(Dataset):
         check_data(curve, landmark, json_data['Polys'][0]['Shapes'], json_dir, self.data_type)
 
         # get polygon mask
-        mask_path = os.path.join(self.mask_path, json_dir.split(self.run_env)[-1].split('.')[0] + '_mask_255.jpg')
+        mask_path = os.path.join(self.mask_path, json_dir.split('/')[-1].split('.')[0] + '_mask_255.jpg')
         poly_curve = get_mask(mask_path, curve)
         poly_curve = torch.as_tensor(poly_curve)
 
@@ -106,7 +108,7 @@ class YanMianDataset(Dataset):
         if self.data_type == 'test':
             origin_image = resize(origin_image, [int(origin_image.size[1] * target['resize_ratio']),
                                                  int(origin_image.size[0] * target['resize_ratio'])])
-            return origin_image, roi_img, target, roi_box, target['resize_ratio']
+            return origin_image, roi_img, target
         return roi_img, target
 
     @staticmethod
@@ -147,9 +149,16 @@ def towards_right(img, landmarks):
 if __name__ == '__main__':
     import transforms as T
     import matplotlib.pyplot as plt
-    mydata = YanMianDataset('./datas', data_type='val', num_classes=11, transforms=T.Compose(
-        [T.GetROI(border_size=30), T.Resize([256]), T.ToTensor(),
-         T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), T.MyPad(size=256)]))
+    mydata = YanMianDataset('./datas', data_type='train', num_classes=11, transforms=T.Compose(
+        [T.GetROI(border_size=30),
+         T.RandomResize(int(0.8 * 256), 256, resize_ratio=1, shrink_ratio=1),
+         T.RandomHorizontalFlip(0.5),
+         T.RandomVerticalFlip(0.5),
+         # T.RandomRotation(10, rotate_ratio=0.7, expand_ratio=0.7),
+         T.ToTensor(),
+         T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+         T.MyPad(size=256)
+         ]))
     for i in range(len(mydata)):
         a, b = mydata[i]
         print(i)

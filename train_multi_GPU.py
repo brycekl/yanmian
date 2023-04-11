@@ -47,7 +47,7 @@ class SegmentationPresetEval:
     def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
         self.transforms = T.Compose([
             T.GetROI(border_size=30),
-            T.Resize([256]),
+            T.RandomResize(256, 256, shrink_ratio=0),
             T.ToTensor(),
             T.Normalize(mean=mean, std=std),
             T.MyPad(size=256),
@@ -232,7 +232,7 @@ def main(args):
                     train_info += f"t_mse_loss: {mean_loss['mse_loss']:.4f}    " \
                                   f"v_mse_loss:{val_loss['mse_loss']:.4f}\n" \
                                   f"mse:{[round(val_mse['mse_classes'][i], 3) for i in range(8, 14)]}\n" \
-                                  f"best_mse:{metrics['best_mse']['m_mse']} eight mse :{metrics['best_mse_weight']}"
+                                  f"best_mse:{metrics['best_mse']['m_mse']} weight mse :{metrics['best_mse_weight']}"
                     losses['train_losses']['mse_loss'].append(round(float(mean_loss['mse_loss']), 3))
                     losses['val_losses']['mse_loss'].append(round(float(val_loss['mse_loss']), 3))
                     metrics['mse'].append(round(float(val_mean_mse), 3))

@@ -86,6 +86,7 @@ class RandomHorizontalFlip(object):
         self.flip_prob = flip_prob
 
     def __call__(self, image, target):
+        # todo 暂未完成测试时，各种输出的翻转。如roi_box等，若无需要，也可以不完成
         if random.random() < self.flip_prob:
             image = F.hflip(image)
             target['mask'] = F.hflip(target['mask'])
@@ -136,7 +137,7 @@ class CenterCrop(object):
 class ToTensor(object):
     def __call__(self, image, target):
         if target['data_type'] == 'test':
-            target['show_img'] = image
+            target['show_roi_img'] = image
         image = F.to_tensor(image)
         target['mask'] = torch.as_tensor(np.array(target['mask']), dtype=torch.int64)
         return image, target
@@ -363,34 +364,3 @@ class PepperNoise(object):
             img = F.to_pil_image(img_)
         return img, mask
 
-
-class Resize(object):
-    def __init__(self, size):
-        if len(size) == 2:
-            size = size[0]
-        self.size = size[0]
-
-    def __call__(self, image, target):
-        ow, oh = image.size
-        ratio = self.size / max(ow, oh)
-        mask = target['mask']
-        # image = F.resize(image, [int(oh * ratio), int(ow * ratio)])
-        # todo 两次resize的选择
-        image = image.resize([int(ow * ratio), int(oh * ratio)])
-        mask = torch.nn.functional.interpolate(mask[None][None], scale_factor=ratio, mode="nearest",
-                                               recompute_scale_factor=True)[0][0]
-        curve = {i: [[j[0] * ratio, j[1] * ratio] for j in target['curve'][i]] for i in target['curve']}
-        # 重新绘制mask的两条线
-        mask[mask == 3] = 0
-        mask[mask == 4] = 0
-        mask = np.array(mask)
-        for label, points in curve.items():
-            points_array = np.array(points, dtype=np.int32)
-            for j in range(len(points_array) - 1):
-                cv2.line(mask, points_array[j], points_array[j + 1], color=label - 3, thickness=2)
-        target['landmark'] = {i: [j[0] * ratio, j[1] * ratio] for i, j in target['landmark'].items()}
-        target['mask'] = mask
-        target['curve'] = curve
-        target['resize_ratio'] = ratio
-
-        return image, target
