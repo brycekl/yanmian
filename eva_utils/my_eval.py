@@ -54,7 +54,7 @@ def create_predict_target(img, prediction, json_dir, towards_right=True, deal_pr
         h, w = img.shape[-2:]
     else:
         w, h = img.size
-    poly_curve = functional.softmax(prediction[:5], dim=0)
+    poly_curve = functional.softmax(prediction[6:], dim=0)
     # 去除部分预测强度不高的数据
     poly_curve[poly_curve < 0.85] = 0
     poly_curve = np.argmax(poly_curve, axis=0)
@@ -63,14 +63,14 @@ def create_predict_target(img, prediction, json_dir, towards_right=True, deal_pr
 
     landmark = {}
     # get the result of landmark
-    for i in range(5, 11):
+    for i in range(6):
         temp = np.array(prediction[i])
         # 先判断不进行操作时,是否存在预测的点,若有,则保存
         y, x = np.where(temp == temp.max())
         if len(x) == 0:
             not_exist_landmark.append(i)
         elif len(x) == 1:
-            landmark[i + 3] = [x[0], y[0]]
+            landmark[i + 8] = [x[0], y[0]]
         elif len(x) > 1:
             print('{} 预测关键点个数大于1'.format(json_dir))
             # 一直对mask进行腐蚀,得到最精确的定位点
@@ -85,7 +85,7 @@ def create_predict_target(img, prediction, json_dir, towards_right=True, deal_pr
                     x = x2
                     y = y2
                     temp = temp2
-            landmark[i + 3] = [x[0], y[0]]
+            landmark[i + 8] = [x[0], y[0]]
 
     towards_right = compute_towards_right(img, landmark)
     if not deal_pre:
@@ -192,15 +192,12 @@ def create_origin_target(ROI_target, box, origin_size):
     ROI_mask = torch.as_tensor(ROI_target['mask'])
     roi_h, roi_w = ROI_mask.shape[-2], ROI_mask.shape[-1]
     if len(ROI_mask.shape) == 3:
-        ROI_mask_ = torch.zeros((roi_h, roi_w))
-        for i, mask in enumerate(ROI_mask):
-            ROI_mask_[ROI_mask[i] != 0] = i
-        ROI_mask = ROI_mask_
+        ROI_mask = np.argmax(ROI_mask, axis=0)
     ROI_landmark = ROI_target['landmark']
     left, top, right, bottom = box
     mask = torch.zeros((origin_size[1], origin_size[0]))
     mask[top:roi_h + top, left:roi_w + left].copy_(ROI_mask)
-    landmark = {i: [j[0] + left, j[1] + top] for i, j in ROI_landmark.items()}
+    landmark = {i: [int(j[0] + left + 0.5), int(j[1] + top + 0.5)] for i, j in ROI_landmark.items()}
     target = {'mask': mask, 'landmark': landmark}
     return target
 
@@ -210,7 +207,8 @@ def show_predict(rgb_img, prediction, classes):
     img = rgb_img.copy()
     if prediction.shape[0] == 5 or prediction.shape[0] == 11:
         # 两个区域和两条线
-        poly_curve = torch.nn.functional.softmax(prediction[:5], dim=0)
+        poly_index = 6 if prediction.shape[0] == 11 else 0
+        poly_curve = torch.nn.functional.softmax(prediction[poly_index:], dim=0)
         poly_curve[poly_curve < 0.5] = 0  # 去除由于裁剪的重复阴影，同时避免小值出现
         poly_curve = np.argmax(poly_curve, axis=0)
         for j in range(1, 5):
@@ -220,8 +218,8 @@ def show_predict(rgb_img, prediction, classes):
             img[..., 2][mask] = 200
     if prediction.shape[0] == 6 or prediction.shape[0] == 11:
         # 上唇，下唇，上颌前缘中点， 下颌前缘中点，下巴，鼻根
-        for i in range(classes - 6, classes):
-            keypoint = prediction[prediction.shape[0] - 6 + i]
+        for i in range(6):
+            keypoint = prediction[i]
             keypoint = np.array(keypoint.to('cpu'))
             h_shifts, w_shifts = np.where(keypoint == keypoint.max())  # np返回 行，列--》对应图片为h， w
             w_shift, h_shift = w_shifts[0], h_shifts[0] + 1
@@ -333,6 +331,7 @@ def show_one_metric(rgb_img, gt, pre, metric: str, not_exist_landmark, box=None,
 def calculate_metrics(rgb_img, gt, not_exist_landmark, is_gt: bool = True, show_img: bool = False, resize_ratio=1,
                       spa=1, compute_MML: bool = True, name=None, save_path=None, put_text=True):
     landmark = gt['landmark']
+    landmark = {i: [int(landmark[i][0]+0.5), int(landmark[i][1]+0.5)] for i in landmark}
     mask = gt['mask']
     img = np.array(rgb_img)
 
