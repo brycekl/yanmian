@@ -65,12 +65,14 @@ class UNet(nn.Module):
                  num_classes: int = 2,
                  num_classes_2: int = 0,
                  bilinear: bool = True,
-                 base_c: int = 64):
+                 base_c: int = 64,
+                 model_name='unet'):
         super(UNet, self).__init__()
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.num_classes_2 = num_classes_2
         self.bilinear = bilinear
+        self.model_name = model_name
 
         self.in_conv = DoubleConv(in_channels, base_c)
         self.down1 = Down(base_c, base_c * 2)
@@ -83,10 +85,31 @@ class UNet(nn.Module):
         self.up3 = Up(base_c * 4, base_c * 2 // factor, bilinear)
         self.up4 = Up(base_c * 2, base_c, bilinear)
         self.out_conv = OutConv(base_c, num_classes)
-        if num_classes_2 != 0:
+
+        # 两个decoder
+        if model_name.find('up1') != -1 and num_classes_2 != 0:
+            self.up4_2 = Up(base_c * 2, base_c, bilinear)
+            self.out_conv2 = OutConv(base_c, num_classes_2)
+            print('creating up1 unet model')
+        elif model_name.find('up2') != -1 and num_classes_2 != 0:
             self.up3_2 = Up(base_c * 4, base_c * 2 // factor, bilinear)
             self.up4_2 = Up(base_c * 2, base_c, bilinear)
             self.out_conv2 = OutConv(base_c, num_classes_2)
+            print('creating up2 unet model')
+        elif model_name.find('up3') != -1 and num_classes_2 != 0:
+            self.up2_2 = Up(base_c * 8, base_c * 4 // factor, bilinear)
+            self.up3_2 = Up(base_c * 4, base_c * 2 // factor, bilinear)
+            self.up4_2 = Up(base_c * 2, base_c, bilinear)
+            self.out_conv2 = OutConv(base_c, num_classes_2)
+            print('creating up3 unet model')
+        elif model_name.find('up4') != -1 and num_classes_2 != 0:
+            self.up1_2 = Up(base_c * 16, base_c * 8 // factor, bilinear)
+            self.up2_2 = Up(base_c * 8, base_c * 4 // factor, bilinear)
+            self.up3_2 = Up(base_c * 4, base_c * 2 // factor, bilinear)
+            self.up4_2 = Up(base_c * 2, base_c, bilinear)
+            self.out_conv2 = OutConv(base_c, num_classes_2)
+            print('creating up4 unet model')
+
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         x1 = self.in_conv(x)
@@ -99,8 +122,25 @@ class UNet(nn.Module):
         ux3 = self.up3(ux2, x2)
         ux4 = self.up4(ux3, x1)
         logits = self.out_conv(ux4)
-        if self.num_classes_2 != 0:
+        if self.model_name.find('up1') != -1 and self.num_classes_2 != 0:
+            up4_2 = self.up4_2(ux3, x1)
+            logits_2 = self.out_conv2(up4_2)
+            logits = torch.cat([logits, logits_2], dim=1)
+        elif self.model_name.find('up2') != -1 and self.num_classes_2 != 0:
             ux3_2 = self.up3_2(ux2, x2)
+            ux4_2 = self.up4_2(ux3_2, x1)
+            logits_2 = self.out_conv2(ux4_2)
+            logits = torch.cat([logits, logits_2], dim=1)
+        elif self.model_name.find('up3') != -1 and self.num_classes_2 != 0:
+            up2_2 = self.up2_2(ux1, x3)
+            ux3_2 = self.up3_2(up2_2, x2)
+            ux4_2 = self.up4_2(ux3_2, x1)
+            logits_2 = self.out_conv2(ux4_2)
+            logits = torch.cat([logits, logits_2], dim=1)
+        elif self.model_name.find('up4') != -1 and self.num_classes_2 != 0:
+            up1_2 = self.up1_2(x5, x4)
+            up2_2 = self.up2_2(up1_2, x3)
+            ux3_2 = self.up3_2(up2_2, x2)
             ux4_2 = self.up4_2(ux3_2, x1)
             logits_2 = self.out_conv2(ux4_2)
             logits = torch.cat([logits, logits_2], dim=1)

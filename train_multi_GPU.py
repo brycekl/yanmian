@@ -73,8 +73,9 @@ def main(args):
 
     device = torch.device(args.device)
     # segmentation nun_classes + background
-    num_classes = args.num_classes
-    assert num_classes in [5, 6, 11]
+    num_classes1, num_classes2 = args.num_classes, args.num_classes2
+    assert num_classes1 in [5, 6, 11] and num_classes2 in [0, 5]
+    num_classes = num_classes1 + num_classes2
 
     mean = (0.2281, 0.2281, 0.2281)
     std = (0.2313, 0.2313, 0.2313)
@@ -114,8 +115,8 @@ def main(args):
 
     print(len(train_dataset), len(val_dataset))
     print("Creating model")
-    model = create_model(num_classes=num_classes, in_channel=3, base_c=32, model_name=model_name,
-                         input_size=args.input_size)
+    model = create_model(num_classes_1=num_classes1, num_classes_2=num_classes2, in_channel=3, base_c=32,
+                         model_name=model_name, input_size=args.input_size)
     model.to(device)
 
     if args.sync_bn:
@@ -151,12 +152,6 @@ def main(args):
         if args.amp:
             scaler.load_state_dict(checkpoint["scaler"])
 
-    if args.test_only:
-        confmat = evaluate(model, val_data_loader, device=device, num_classes=num_classes)
-        val_info = str(confmat)
-        print(val_info)
-        return
-
     print("Start training")
     start_time = time.time()
     # 记录训练/测试的损失函数变化，
@@ -165,7 +160,7 @@ def main(args):
     metrics = {'best_mse': {8: 0, 9: 0, 10: 0, 11: 0, 12: 0, 13: 0, 'm_mse': 1000}, 'best_mse_weight': 1000,
                'best_dice': 0, 'dice': [], 'mse': [], 'best_epoch_mse': {}, 'best_epoch_dice': {}}
     save_model = {'save_mse': False, 'save_mse_weight': False, 'save_dice': False}
-    weight = 1 if num_classes == 5 or num_classes == 6 else 5
+    dice_weight = 5 if num_classes == 11 else 1  # gei dice loss 进行加强的倍数
     # tensorboard writer
     tr_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'train'))
     val_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'val'))
@@ -178,9 +173,9 @@ def main(args):
         if epoch == 0 and args.resume:
             evaluate(model, val_data_loader, device=device, num_classes=num_classes)
         mean_loss, lr = train_one_epoch(model, optimizer, train_data_loader, device, epoch, num_classes,
-                                        weight=weight, print_freq=args.print_freq, scaler=scaler)
+                                        weight=dice_weight, print_freq=args.print_freq, scaler=scaler)
         lr_scheduler.step()
-        val_loss, val_mse = evaluate(model, val_data_loader, device=device, num_classes=num_classes, weight=weight)
+        val_loss, val_mse = evaluate(model, val_data_loader, device=device, num_classes=num_classes, weight=dice_weight)
 
         # 根据验证结果，求得平均指标，并判断是否需要保存模型
         if num_classes == 6 or num_classes == 11:
@@ -313,23 +308,21 @@ def main(args):
         plt.close()
 
         # 重命名
-        new_name = output_dir + f'_var{var}_{metrics["best_mse"]["m_mse"]:.3f}' if num_classes == 6 \
-            else (output_dir + f'_{metrics["best_dice"]:.3f}' if num_classes == 5
-                  else output_dir + f'_var{var}_{metrics["best_mse"]["m_mse"]:.3f}_w{weight}_{metrics["best_dice"]:.3f}')
+        new_name = output_dir + f'_var{var}_{metrics["best_mse"]["m_mse"]:.3f}' if num_classes == 6 else \
+            (output_dir + f'_{metrics["best_dice"]:.3f}' if num_classes == 5 else
+             output_dir + f'_var{var}_{metrics["best_mse"]["m_mse"]:.3f}_w{dice_weight}_{metrics["best_dice"]:.3f}')
         os.rename(output_dir, new_name)
 
 
-if __name__ == "__main__":
+def parse_args():
     import argparse
-    import yaml
-
-    parser = argparse.ArgumentParser(
-        description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__)
 
     '''basic parameter'''
-    parser.add_argument('--num_classes', default=11, type=int, help='number of classes')  # 4 / 6 / 11
-    parser.add_argument('--output_dir', default='./models/unet_test', help='path where to save')
-    parser.add_argument('--model_name', default='R50-ViT-B_16', help='the model name')
+    parser.add_argument('--num_classes', default=11, type=int, help='number of classes')  # 11 / 6 / 4
+    parser.add_argument('--num_classes2', default=0, type=int, help='number of classes')  #  0 / 5
+    parser.add_argument('--output_dir', default='./models', help='path where to save')
+    parser.add_argument('--model_name', default='unet', help='the model name')
     parser.add_argument('--heatmap_shrink_rate', default=1, type=int)  # hrnet最后没有复原为原图大小
     parser.add_argument('-b', '--batch_size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
@@ -384,10 +377,21 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    return args
+
+
+if __name__ == "__main__":
+    import yaml
+
+    args = parse_args()
     # 如果指定了保存文件地址，检查文件夹是否存在，若不存在，则创建
     args.output_dir = os.path.join(args.output_dir, args.model_name, args.model_name)
     if args.output_dir:
         mkdir(args.output_dir)
+
+    # 如果没有分开的decoder标志 ’up'，则将num_classes2置0
+    if args.model_name.find('up') == -1 and args.num_classes2 != 0:
+        args.num_classes, args.num_classes2 = args.num_classes + args.num_classes2, 0
 
     # 写入文件
     with open(os.path.join(args.output_dir, 'config.yml'), 'w') as f:

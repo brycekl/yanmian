@@ -38,26 +38,27 @@ def warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor):
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=f)
 
 
-def create_model(num_classes, num_classes_2=0, in_channel=3, base_c=32, model_name='unet', **kwargs):
-    if model_name == 'unet':
-        model = src.UNet(in_channels=in_channel, num_classes=num_classes, num_classes_2=num_classes_2, base_c=base_c)
+def create_model(num_classes_1, num_classes_2=0, in_channel=3, base_c=32, model_name='unet', **kwargs):
+    if model_name.find('unet') != -1:
+        model = src.UNet(in_channels=in_channel, num_classes=num_classes_1, num_classes_2=num_classes_2, base_c=base_c,
+                         model_name=model_name)
     elif model_name == 'mobilev3unet':
-        model = src.MobileV3Unet(num_classes=num_classes)
+        model = src.MobileV3Unet(num_classes=num_classes_1)
     elif model_name == 'vgg16unet':
-        model = src.VGG16UNet(num_classes=num_classes)
+        model = src.VGG16UNet(num_classes=num_classes_1)
     elif model_name.find('u2net') != -1:
         assert model_name in ['u2net_lite', 'u2net_full']
-        model = src.u2net_list[model_name](num_classes)
+        model = src.u2net_list[model_name](num_classes_1)
     elif model_name == 'resnet34unet':
-        model = src.Resnet34(3, num_classes)
+        model = src.Resnet34(3, num_classes_1)
     elif model_name.find('ViT') != -1:
         assert model_name in ['ViT-B_16', 'ViT-B_32', 'ViT-L_16', 'ViT-L_32', 'ViT-H_14', 'R50-ViT-B_16', 'R50-ViT-L_16']
         vit_config = src.CONFIGS[model_name]
-        vit_config.n_classes = num_classes
+        vit_config.n_classes = num_classes_1
         if model_name.find('R50') != -1:
             vit_config.patches.grid = (
                 int(256 / 16), int(256 / 16))
-        model = src.TransUNet(vit_config, img_size=kwargs['input_size'], num_classes=num_classes)
+        model = src.TransUNet(vit_config, img_size=kwargs['input_size'], num_classes=num_classes_1)
 
     # model = HighResolutionNet(num_joints=num_classes, base_channel=base_c)
     print('create {} model successfully.'.format(model_name))
