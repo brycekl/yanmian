@@ -114,7 +114,8 @@ def main(args):
 
     print(len(train_dataset), len(val_dataset))
     print("Creating model")
-    model = create_model(num_classes=num_classes, in_channel=3, base_c=32, model=model_name)
+    model = create_model(num_classes=num_classes, in_channel=3, base_c=32, model_name=model_name,
+                         input_size=args.input_size)
     model.to(device)
 
     if args.sync_bn:
@@ -253,13 +254,13 @@ def main(args):
                     save_file["scaler"] = scaler.state_dict()
 
                 if args.save_best is True and save_model['save_mse'] is True:
-                    save_on_master(save_file, os.path.join(output_dir, 'best_model.pth'))
+                    save_on_master(save_file, os.path.join(output_dir, 'model.pth'))
                     print('save best model')
-                if save_model['save_mse_weight'] is True:
-                    save_on_master(save_file, os.path.join(output_dir, 'best_weight_model.pth'))
+                if save_model['save_mse_weight'] is True and False:
+                    save_on_master(save_file, os.path.join(output_dir, 'weight_model.pth'))
                     print('save best weight model')
-                if save_model['save_dice'] is True:
-                    save_on_master(save_file, os.path.join(output_dir, 'best_dice_model.pth'))
+                if save_model['save_dice'] is True and num_classes != 11:
+                    save_on_master(save_file, os.path.join(output_dir, 'dice_model.pth'))
                     print('save best dice model')
                     # if best_mse < 4:
                     #     save_on_master(save_file,
@@ -327,7 +328,7 @@ if __name__ == "__main__":
 
     '''basic parameter'''
     parser.add_argument('--num_classes', default=11, type=int, help='number of classes')  # 4 / 6 / 11
-    parser.add_argument('--output_dir', default='./models', help='path where to save')
+    parser.add_argument('--output_dir', default='./models/unet_test', help='path where to save')
     parser.add_argument('--model_name', default='R50-ViT-B_16', help='the model name')
     parser.add_argument('--heatmap_shrink_rate', default=1, type=int)  # hrnet最后没有复原为原图大小
     parser.add_argument('-b', '--batch_size', default=32, type=int,
@@ -336,8 +337,8 @@ if __name__ == "__main__":
     '''model setting'''
     # parser.add_argument('--deep_supervision', default=False, type=str2bool)
     parser.add_argument('--input_channels', default=3, type=int, help='input channels')
-    parser.add_argument('--input-size', default=[256, 256], nargs='+', type=int, help='input model size: [h, w]')
-    parser.add_argument('--data-path', default='./datas', help='dataset')
+    parser.add_argument('--input_size', default=[256, 256], nargs='+', type=int, help='input model size: [h, w]')
+    parser.add_argument('--data_path', default='./datas', help='dataset')
     parser.add_argument('--loss', default='BCEDiceLoss',)  # todo 未设置
 
     '''optimizer'''
@@ -346,7 +347,7 @@ if __name__ == "__main__":
                         help='initial learning rate, 0.001 is the default value for training '
                              'on 4 gpus and 32 images_per_gpu')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-    parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float, metavar='W',
+    parser.add_argument('--wd', '--weight_decay', default=1e-4, type=float, metavar='W',
                         help='weight decay (default: 1e-4)', dest='weight_decay')
 
     '''learning scheduler'''
@@ -355,9 +356,9 @@ if __name__ == "__main__":
     # 针对torch.optim.lr_scheduler.MultiStepLR的参数
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
     parser.add_argument('--epochs', default=150, type=int, metavar='N', help='number of total epochs to run')
-    parser.add_argument('--lr-milestones', default=[100, 130], nargs='+', type=int,
+    parser.add_argument('--lr_milestones', default=[100, 130], nargs='+', type=int,
                         help='decrease lr every step-size epochs')
-    parser.add_argument('--lr-gamma', default=0.1, type=float, help='decrease lr by a factor of lr-gamma')
+    parser.add_argument('--lr_gamma', default=0.1, type=float, help='decrease lr by a factor of lr-gamma')
     parser.add_argument('--min_lr', default=1e-5, type=float,
                         help='minimum learning rate')
     parser.add_argument('--factor', default=0.1, type=float)
@@ -368,16 +369,16 @@ if __name__ == "__main__":
     parser.add_argument('--device', default='cuda', help='device')
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('--print-freq', default=10, type=int, help='print frequency')
+    parser.add_argument('--print_freq', default=10, type=int, help='print frequency')
     parser.add_argument('--save_best', default=True)
     # 基于上次的训练结果接着训练
     parser.add_argument('--resume', default='', help='resume from checkpoint')
-    parser.add_argument('--test-only', action="store_true", help="test only")
+    parser.add_argument('--test_only', action="store_true", help="test only")
     # 开启的进程数(注意不是线程)
-    parser.add_argument('--world-size', default=4, type=int,
+    parser.add_argument('--world_size', default=4, type=int,
                         help='number of distributed processes')
-    parser.add_argument('--dist-url', default='env://', help='url used to set up distributed training')
-    parser.add_argument("--sync-bn", default=True, action="store_true", help="Use sync batch norm")
+    parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
+    parser.add_argument("--sync_bn", default=True, action="store_true", help="Use sync batch norm")
     # 是否使用混合精度训练(需要GPU支持混合精度)
     parser.add_argument("--amp", action="store_true", help="Use torch.cuda.amp for mixed precision training")
 
