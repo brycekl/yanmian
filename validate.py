@@ -20,24 +20,24 @@ def time_synchronized():
 
 def show_img(img, pre_target, target, title='', save_path=None):
     img = np.array(img) / 255
-    mask = target['mask']
+    mask = np.argmax(target['mask'], 0) if len(target['mask'].size()) == 3 else target['mask']
     landmark = target['landmark']
     landmark = {i: [int(landmark[i][0]+0.5), int(landmark[i][1]+0.5)] for i in landmark}
     for x_tick in range(mask.shape[0]):
         for y_tick in range(mask.shape[1]):
             if mask[x_tick][y_tick].item() != 0:
-                img[x_tick][y_tick][1] = img[x_tick][y_tick][1] * 0.6 + 0.4
+                img[x_tick][y_tick][0] = img[x_tick][y_tick][0] * 0.5 + 0.5
     for i in landmark.values():
-        cv2.circle(img, i, 2, (0, 1, 0), -1)
+        cv2.circle(img, i, 2, (1, 0, 0), -1)
 
     pre_mask = pre_target['mask']
     pre_landmark = pre_target['landmark']
     for x_tick in range(pre_mask.shape[0]):
         for y_tick in range(pre_mask.shape[1]):
             if pre_mask[x_tick][y_tick].item() != 0:
-                img[x_tick][y_tick][0] = img[x_tick][y_tick][0] * 0.6 + 0.4
+                img[x_tick][y_tick][1] = img[x_tick][y_tick][1] * 0.5 + 0.4
     for i in pre_landmark.values():
-        cv2.circle(img, i, 2, (1, 0, 0), -1)
+        cv2.circle(img, i, 2, (0, 1, 0), -1)
 
     plt.title(title)
     if save_path:
@@ -51,7 +51,7 @@ def show_img(img, pre_target, target, title='', save_path=None):
 
 
 def main():
-    model_path = 'models/unet/unet_var40_3.592_w5_0.765'
+    model_path = 'models/unet/unet_var40_3.502_w5_0.765'
     save_root = model_path.replace('models', 'results')
 
     # basic messages
@@ -61,7 +61,9 @@ def main():
     spacing_cm['name'] = [i.split('.')[0] for i in spacing_cm['name']]
     with open(os.path.join(model_path, 'config.yml'), 'r') as f:
         config = yaml.load(f.read(), Loader=yaml.Loader)
-    
+    num_classes1, num_classes2 = config.num_classes, config.num_classes2 if 'num_classes2' in config else 0
+    num_classes = num_classes1 + num_classes2
+
     """ init data """
     data_transform = T.Compose([
         T.GetROI(border_size=30), T.RandomResize(256, 256, shrink_ratio=0), T.ToTensor(),
@@ -76,17 +78,18 @@ def main():
     init_img = torch.zeros((1, config.input_channels, *config.input_size), device=device)
 
     # load model
-    model = create_model(model_name=config.model_name, num_classes=config.num_classes, input_size=config.input_size)
-    model.load_state_dict(torch.load(os.path.join(model_path, 'best_model.pth'), map_location='cpu')['model'])
+    model = create_model(model_name=config.model_name, num_classes_1=num_classes1,
+                         num_classes_2=num_classes2, input_size=config.input_size)
+    model.load_state_dict(torch.load(os.path.join(model_path, 'model.pth'), map_location=device)['model'])
     model.to(device).eval()
 
     # if model 1poly model
     model2_path = ''
-    if config.num_classes == 6:
+    if num_classes != 11 and model2_path:
         with open(os.path.join(model2_path, 'config.yml'), 'r') as f:
             config2 = yaml.load(f.read(), Loader=yaml.Loader)
         model2 = create_model(model_name=config2.model_name, num_classes=config2.num_classes, input_size=config2.input_size)
-        model2.load_state_dict(torch.load(os.path.join(model2_path, 'best_model.pth'), map_location='cpu')['model'])
+        model2.load_state_dict(torch.load(os.path.join(model2_path, 'model.pth'), map_location=device)['model'])
         model2.to(device).eval()
 
     # begin to test datas
@@ -116,7 +119,7 @@ def main():
             # predict image
             output = model(pre_img.to(device))
             prediction = output.squeeze().to('cpu')
-            if config.num_classes == 6:
+            if num_classes != 11 and model2_path:
                 output2 = model2(pre_img.to(device))
                 prediction2 = output2.squeeze().to('cpu')
                 prediction = torch.cat((prediction, prediction2), 0)
@@ -155,13 +158,10 @@ def main():
                                                                        towards_right=towards_right, deal_pre=True)
 
             # 将ROI target 转换为原图大小
-            target = create_origin_target(target, roi_box, original_img.size)
+            gt_target = create_origin_target(target, roi_box, original_img.size)
             pre_target = create_origin_target(pre_ROI_target, roi_box, original_img.size)
-            show_img(original_img, pre_target, target, title=img_name, save_path=os.path.join(save_root, 'pre_results'))
+            show_img(show_roi_img, pre_ROI_target, target, title=img_name, save_path=os.path.join(save_root, 'pre_results'))
 
-            if len(not_exist_landmark) > 0:
-                print(not_exist_landmark)
-                show_img(original_img, pre_target, target)
             # 分指标展示'IFA', 'MNM', 'FMA', 'PL', 'MML'
             # for metric in ['IFA', 'MNM', 'FMA', 'PL', 'MML']:
             #     show_one_metric(original_img, target, pre_target, metric, not_exist_landmark, show_img=True)
@@ -169,7 +169,7 @@ def main():
             pre_data, pre_img = calculate_metrics(original_img, pre_target, not_exist_landmark, is_gt=False,
                                                   resize_ratio=resize_ratio,  show_img=False, compute_MML=True,
                                                   spa=sp_cm, name=img_name, save_path=save_root + '/PRE')
-            gt_data, gt_img = calculate_metrics(original_img, target, not_exist_landmark=[], show_img=False,
+            gt_data, gt_img = calculate_metrics(original_img, gt_target, not_exist_landmark=[], show_img=False,
                                                 resize_ratio=resize_ratio, compute_MML=True, spa=sp_cm,
                                                 name=img_name, save_path=save_root + '/GT')
             # save results and predicted images
