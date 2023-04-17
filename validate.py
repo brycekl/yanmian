@@ -1,7 +1,8 @@
 import os
 import time
+
+import numpy as np
 import pandas as pd
-import torch
 import yaml
 from yanMianDataset import YanMianDataset
 import transforms as T
@@ -11,6 +12,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from train_utils.init_model_utils import create_model
 from train_utils.dice_coefficient_loss import multiclass_dice_coeff
+from torch.nn.functional import softmax
 
 
 def time_synchronized():
@@ -51,7 +53,7 @@ def show_img(img, pre_target, target, title='', save_path=None):
 
 
 def main():
-    model_path = 'models/unet/unet_var40_3.502_w5_0.765'
+    model_path = 'models/vgg16unet/vgg16unet_var40_3.580_w5_0.768'
     save_root = model_path.replace('models', 'results')
 
     # basic messages
@@ -117,12 +119,11 @@ def main():
             pre_img = torch.unsqueeze(pre_img, dim=0)
 
             # predict image
-            output = model(pre_img.to(device))
-            prediction = output.squeeze().to('cpu')
+            prediction = model(pre_img.to(device)).to('cpu')
             if num_classes != 11 and model2_path:
-                output2 = model2(pre_img.to(device))
-                prediction2 = output2.squeeze().to('cpu')
-                prediction = torch.cat((prediction, prediction2), 0)
+                prediction2 = model2(pre_img.to(device)).to('cpu')
+                prediction = torch.cat((prediction, prediction2), 1)
+            prediction = prediction.squeeze()
 
             # 去除pad的数据
             raw_roi_w, raw_roi_h = show_roi_img.size
@@ -132,8 +133,8 @@ def main():
             # 保存预测的热力图结果
             if not os.path.exists(os.path.join(save_root, 'pre_heatmap')):
                 os.makedirs(os.path.join(save_root, 'pre_heatmap'))
-            for sssj, ssss in enumerate(prediction):
-                plt.imsave(os.path.join(save_root, 'pre_heatmap', img_name + '_' + str(sssj) + '.png'), ssss)
+            for pre_ind, pre_channel in enumerate(prediction):
+                plt.imsave(os.path.join(save_root, 'pre_heatmap', img_name + '_' + str(pre_ind) + '.png'), pre_channel)
 
             # 计算预测数据的landmark 的 mse误差
             mse['name'].append(img_name)
@@ -144,8 +145,7 @@ def main():
                 mse[name_index[i + 8]].append(error*sp_cm)
 
             # 计算预测的dice
-            dice = multiclass_dice_coeff(torch.nn.functional.softmax(prediction[6:].unsqueeze(0), dim=1),
-                                         target['mask'].unsqueeze(0))
+            dice = multiclass_dice_coeff(softmax(prediction[6:], 0).unsqueeze(0), target['mask'].unsqueeze(0))
             for i, (k, v) in enumerate(dices.items()):
                 if k == 'name':
                     dices['name'].append(img_name)
@@ -192,37 +192,45 @@ def main():
                 if key == 'FS' and (error > 2.0 or error < -2.0):
                     errorkey = 'FS'
                 if len(errorkey) > 0:
-                    save_error_path = save_root + '/error'
-                    save_error_path_ = os.path.join(save_error_path, errorkey)
-                    if not os.path.exists(os.path.join(save_error_path, errorkey)):
-                        os.makedirs(save_error_path_)
-                    pre_img.save(os.path.join(save_error_path_, img_name + '_pre_' + str(float(error)) + '.png'))
-                    gt_img.save(os.path.join(save_error_path_, img_name + '_gt_' + str(float(error)) + '.png'))
+                    save_error_path = os.path.join(save_root + '/error', errorkey)
+                    if not os.path.exists(save_error_path):
+                        os.makedirs(save_error_path)
+                    pre_img.save(os.path.join(save_error_path, img_name + '_pre_' + str(float(error)) + '.png'))
+                    gt_img.save(os.path.join(save_error_path, img_name + '_gt_' + str(float(error)) + '.png'))
 
     # 评估 mse误差   var100_mse_Rightcrop最佳
-    for i in mse:
-        if i == 'name':
-            continue
-        dd = np.asarray(mse[i])
-        print(i, dd.mean(), dd.std())
-        for j in [0.2, 0.3, 0.4, 0.5]:
-            print(j, len(np.where(dd < j)[0])/500)
     df = pd.DataFrame(mse)
     df.to_excel(save_root + '/mse_mm.xlsx')
 
     # dice 误差
     mean_dice = [np.asarray(j).mean() for i, j in dices.items() if i != 'name']
-    print(mean_dice)
     df = pd.DataFrame(dices)
     df.to_excel(save_root + '/dices.xlsx')
 
-    # output the mean and std datas of each metrics
+    # save
+    df_gt = pd.DataFrame(result_gt)
+    df_gt.to_excel(save_root + '/result_gt.xlsx', index=True)
+    df_pre = pd.DataFrame(result_pre)
+    df_pre.to_excel(save_root + '/result_pre.xlsx', index=True)
+
+    # 保存个点mse 结果到txt
+    result_info = 'MSE:\n'
+    for i in mse:
+        if i == 'name':
+            continue
+        dd = np.asarray(mse[i])
+        result_info += f'{i}  {dd.mean():.2f}  {dd.std():.2f}\n'
+        for j in [0.2, 0.3, 0.4, 0.5]:
+            result_info += '{}  {}\n'.format(j, len(np.where(dd < j)[0] / 500))
+    # dice 结果
+    result_info += f'Dice: {[round(dice, 2) for dice in mean_dice]}\n\n'
+    # 各个指标误差
     for i in ['IFA', 'MNM', 'FMA', 'PL', 'FS']:
         pre = result_pre[i]
         gt = result_gt[i]
-        print(i)
+        result_info += f'{i} 没有预测：{pre.count(-1)}\n'
         # python 数组可以用count 不可以用 Ture or False作为索引， numpy 数组可以用True or False作为索引，不能用count
-        print('没有预测：', pre.count(-1))
+        # 去除没有预测的数据，再计算误差
         if pre.count(-1) > 0:
             temp = pre
             temp_gt = gt
@@ -235,27 +243,25 @@ def main():
         error = []
         for m, n in zip(pre, gt):
             error.append(abs(m - n))
-        print('error:', np.mean(error))
-        print('error标准差:', np.std(error))
+        result_info += f'error mean: {np.mean(error)} \nerror std: {np.std(error)}\n'
     for i in ['FPL', 'MML']:
-        print(i)
-        print('not  gt:', result_gt[i].count('not'), '    pre: ', result_pre[i].count('not'))
-        print('阳性 1  gt:', result_gt[i].count(1), '    pre: ', result_pre[i].count(1))
-        print('阴性 -1  gt:', result_gt[i].count(-1), '    pre: ', result_pre[i].count(-1))
-        print('0  gt:', result_gt[i].count(0), '    pre: ', result_pre[i].count(0))
-
-    # save
-    df_gt = pd.DataFrame(result_gt)
-    df_gt.to_excel(save_root + '/result_gt.xlsx', index=True)
-    df_pre = pd.DataFrame(result_pre)
-    df_pre.to_excel(save_root + '/result_pre.xlsx', index=True)
-
+        result_info += f'{i}\n'
+        result_info += f"not gt: {result_gt[i].count('not')},   pre: {result_pre[i].count('not')}\n"
+        result_info += f"阳性 1  gt: {result_gt[i].count(1)},   pre: {result_pre[i].count(1)}\n"
+        result_info += f"阴性 -1  gt: {result_gt[i].count(-1)},   pre: {result_pre[i].count(-1)}\n"
+        result_info += f"0  gt: {result_gt[i].count(0)},   pre: {result_pre[i].count(0)}\n"
+    result_info += '\nICC\n'
     # 计算icc
     for metric in result_pre:
         if metric in ['IFA', 'MNM', 'FMA', 'FS', 'PL']:
             icc_1, icc_k = analyze.metric_icc(result_pre, result_gt, metric)
+            result_info += '{}: icc_1: {:.3f}   icc_k: {:.3f}\n'.format(metric, icc_1, icc_k)
             print('{}: icc_1: {:.3f}   icc_k: {:.3f}'.format(metric, icc_1, icc_k))
             analyze.metric_BA(result_pre, result_gt, metric, save_path=save_root + '/BA/')
+
+    # 保存结果到txt里
+    with open(os.path.join(save_root, 'result.txt'), "a") as f:
+        f.write(result_info)
 
 
 if __name__ == '__main__':
