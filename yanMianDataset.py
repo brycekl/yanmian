@@ -42,6 +42,7 @@ class YanMianDataset(Dataset):
         with open(txt_path) as read:
             txt_path = [line.strip() for line in read.readlines() if len(line.strip()) > 0]
         if ki != -1:
+            print('use cross validation, this is {}.'.format(ki))
             # 使用k折交叉验证
             assert data_type in ['train', 'val'], 'test can not use cross validation'
             random.seed(1)

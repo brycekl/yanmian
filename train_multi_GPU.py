@@ -1,15 +1,14 @@
 import datetime
 import os
-import time
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import random
 
 import transforms as T
 from torch.utils.tensorboard import SummaryWriter
-from train_utils import train_one_epoch, evaluate, create_lr_scheduler, init_distributed_mode, save_on_master, mkdir, \
-    create_model
+from train_utils import *
 from yanMianDataset import YanMianDataset
 
 
@@ -68,6 +67,7 @@ def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
 
 
 def main(args):
+    same_seeds(0)
     init_distributed_mode(args)
     print(args)
 
@@ -104,13 +104,11 @@ def main(args):
         test_sampler = torch.utils.data.SequentialSampler(val_dataset)
 
     train_data_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size,
-        sampler=train_sampler, num_workers=args.workers,
-        collate_fn=train_dataset.collate_fn, drop_last=False)
+        train_dataset, batch_size=args.batch_size, sampler=train_sampler, num_workers=args.workers,
+        collate_fn=train_dataset.collate_fn, drop_last=False, worker_init_fn=seed_worker)
 
     val_data_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=1,
-        sampler=test_sampler, num_workers=args.workers,
+        val_dataset, batch_size=1, sampler=test_sampler, num_workers=args.workers, worker_init_fn=seed_worker,
         collate_fn=train_dataset.collate_fn)
 
     print(len(train_dataset), len(val_dataset))
@@ -152,8 +150,6 @@ def main(args):
         if args.amp:
             scaler.load_state_dict(checkpoint["scaler"])
 
-    print("Start training")
-    start_time = time.time()
     # 记录训练/测试的损失函数变化，
     # 记录验证获得最优的各点的mse，dice，以及mse变化、dice变化、取得最优指标时的epoch
     losses = {'train_losses': {'mse_loss': [], 'dice_loss': []}, 'val_losses': {'mse_loss': [], 'dice_loss': []}}
@@ -167,11 +163,11 @@ def main(args):
     init_img = torch.zeros((1, 3, 256, 256), device=device)
     tr_writer.add_graph(model, init_img)
 
+    print("Start training")
+    start_time = time_synchronized()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
-        if epoch == 0 and args.resume:
-            evaluate(model, val_data_loader, device=device, num_classes=num_classes)
         mean_loss, lr = train_one_epoch(model, optimizer, train_data_loader, device, epoch, num_classes,
                                         weight=dice_weight, print_freq=args.print_freq, scaler=scaler)
         lr_scheduler.step()
@@ -255,7 +251,7 @@ def main(args):
                     save_on_master(save_file, os.path.join(output_dir, 'weight_model.pth'))
                     print('save best weight model')
                 if save_model['save_dice'] is True and num_classes != 11:
-                    save_on_master(save_file, os.path.join(output_dir, 'dice_model.pth'))
+                    save_on_master(save_file, os.path.join(output_dir, 'model.pth'))
                     print('save best dice model')
                     # if best_mse < 4:
                     #     save_on_master(save_file,
@@ -263,26 +259,25 @@ def main(args):
 
     # 训练结束，将最优结果写入txt
     if args.rank in [-1, 0]:
+        total_time = time_synchronized() - start_time
+        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+        print('Training time {}'.format(total_time_str))
+        train_info = f'Training time {total_time_str}\n'
         with open(results_file, "a") as f:
-            train_info = ''
             if num_classes == 6 or num_classes == 11:
-                train_info += f"[best mse: {metrics['best_mse']['m_mse']:.4f}]     " \
-                              f"[best mse weight: {metrics['best_mse_weight']:.4f}]\n"  \
+                train_info += f"best mse: {metrics['best_mse']['m_mse']:.4f}     " \
+                              f"best mse weight: {metrics['best_mse_weight']:.4f}\n"  \
                               f"mse:{[metrics['best_mse'][i] for i in range(8, 14)]}\n"
                 train_info += f'epoch:mse    '
                 for ep, va in metrics['best_epoch_mse'].items():
                     train_info += f"{ep}:{va}    "
                 train_info += f'\n'
             if num_classes == 5 or num_classes == 11:
-                train_info += f"[best dice: {metrics['best_dice']:.4f}]\n"
+                train_info += f"best dice: {metrics['best_dice']:.4f}\n"
                 for ep, va in metrics['best_epoch_dice'].items():
                     train_info += f"{ep}:{va}    "
                 train_info += f'\n'
             f.write(train_info)
-
-        total_time = time.time() - start_time
-        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print('Training time {}'.format(total_time_str))
         print(f'best_mse: {metrics["best_mse"]["m_mse"]:.3f}   best_weight_mse: {metrics["best_mse_weight"]:.3f}   '
               f'best_dice: {metrics["best_dice"]:.3f}')
         print(metrics['best_epoch_mse'], metrics['best_epoch_dice'])
@@ -291,11 +286,11 @@ def main(args):
         skip_epoch = 1  # 前面训练不稳定，作图跳过的epoch数
         assert skip_epoch >= 0 and skip_epoch <= args.epochs
         if num_classes == 6 or num_classes == 11:
-            plt.plot(losses['train_losses']['mse_loss'][skip_epoch:], 'r', label='train_loss')
-            plt.plot(losses['val_losses']['mse_loss'][skip_epoch:], 'g', label='val_loss')
+            plt.plot(losses['train_losses']['mse_loss'][skip_epoch:], 'r', label='train_mse_loss')
+            plt.plot(losses['val_losses']['mse_loss'][skip_epoch:], 'g', label='val_mse_loss')
         if num_classes == 5 or num_classes == 11:
-            plt.plot(losses['train_losses']['dice_loss'][skip_epoch:], 'r', label='train_loss')
-            plt.plot(losses['val_losses']['dice_loss'][skip_epoch:], 'g', label='val_loss')
+            plt.plot(losses['train_losses']['dice_loss'][skip_epoch:], 'r', label='train_dice_loss')
+            plt.plot(losses['val_losses']['dice_loss'][skip_epoch:], 'b', label='val_dice_loss')
         plt.legend()
         plt.savefig(output_dir + '/' + "loss.png")
         plt.close()
@@ -320,12 +315,13 @@ def parse_args():
 
     '''basic parameter'''
     parser.add_argument('--num_classes', default=11, type=int, help='number of classes')  # 11 / 6 / 4
-    parser.add_argument('--num_classes2', default=0, type=int, help='number of classes')  #  0 / 5
+    parser.add_argument('--num_classes2', default=0, type=int, help='number of classes')  # 0 / 5
     parser.add_argument('--output_dir', default='./models', help='path where to save')
     parser.add_argument('--model_name', default='unet', help='the model name')
     parser.add_argument('--heatmap_shrink_rate', default=1, type=int)  # hrnet最后没有复原为原图大小
     parser.add_argument('-b', '--batch_size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
+    parser.add_argument('--random_seed', default=0, type=int, help='set random seed')
 
     '''model setting'''
     # parser.add_argument('--deep_supervision', default=False, type=str2bool)

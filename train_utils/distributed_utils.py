@@ -340,5 +340,3 @@ def init_distributed_mode(args):
     torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                          world_size=args.world_size, rank=args.rank)
     setup_for_distributed(args.rank == 0)
-    torch.manual_seed(1)
-    torch.cuda.manual_seed_all(1)
