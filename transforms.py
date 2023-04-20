@@ -4,7 +4,9 @@ import random
 import cv2
 import numpy as np
 import torch
+from typing import Tuple
 from PIL import Image
+from data_utils.init_anno import make_2d_heatmap
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
 
@@ -88,10 +90,10 @@ class RandomHorizontalFlip(object):
     def __call__(self, image, target):
         # todo 暂未完成测试时，各种输出的翻转。如roi_box等，若无需要，也可以不完成
         if random.random() < self.flip_prob:
-            image = F.hflip(image)
-            target['mask'] = F.hflip(target['mask'])
-            w, h = image.size
-            target['landmark'] = {i: [w - j[0], j[1]] for i, j in target['landmark'].items()}
+            image = np.ascontiguousarray(np.flip(image, axis=[1]))
+            target['mask'] = np.ascontiguousarray(np.flip(target['mask'], axis=[1]))
+            h, w = image.shape[:2]
+            target['landmark'] = [[w - i[0], i[1]] for i in target['landmark']]
             target['curve'] = {i: [[w - j[0], j[1]] for j in target['curve'][i]] for i in target['curve']}
         return image, target
 
@@ -102,10 +104,10 @@ class RandomVerticalFlip(object):
 
     def __call__(self, image, target):
         if random.random() < self.flip_prob:
-            image = F.vflip(image)
-            target['mask'] = F.vflip(target['mask'])
-            w, h = image.size
-            target['landmark'] = {i: [j[0], h - j[1]] for i, j in target['landmark'].items()}
+            image = np.ascontiguousarray(np.flip(image, axis=[0]))
+            target['mask'] = np.ascontiguousarray(np.flip(target['mask'], axis=[0]))
+            h, w = image.shape[:2]
+            target['landmark'] = [[i[0], h - i[1]] for i in target['landmark']]
             target['curve'] = {i: [[j[0], h - j[1]] for j in target['curve'][i]] for i in target['curve']}
         return image, target
 
@@ -139,7 +141,7 @@ class ToTensor(object):
         if target['data_type'] == 'test':
             target['show_roi_img'] = image
         image = F.to_tensor(image)
-        target['mask'] = torch.as_tensor(np.array(target['mask']), dtype=torch.int64)
+        target['mask'] = torch.as_tensor(np.array(target['mask']), dtype=torch.float32)
         return image, target
 
 
@@ -232,10 +234,10 @@ class GetROI(object):
             y, x = np.where(mask != 0)
             # 将landmark的值加入
             x, y = x.tolist(), y.tolist()
-            x.extend([int(i[0]) for i in landmark.values()])
-            y.extend([int(i[1]) for i in landmark.values()])
-            left, right = min(x) - self.border_size, max(x) + self.border_size
-            top, bottom = min(y) - self.border_size, max(y) + self.border_size
+            x.extend([*landmark.T[0], *target['curve'][6].T[0], *target['curve'][7].T[0]])
+            y.extend([*landmark.T[1], *target['curve'][6].T[1], *target['curve'][7].T[1]])
+            left, right = int(min(x) - self.border_size), int(max(x) + self.border_size + 0.5)
+            top, bottom = int(min(y) - self.border_size), int(max(y) + self.border_size + 0.5)
             left = left if left > 0 else 0
             right = right if right < img_w else img_w
             top = top if top > 0 else 0
@@ -252,8 +254,8 @@ class GetROI(object):
 
         img = F.crop(img, top, left, height, width)
         target['mask'] = F.crop(mask, top, left, height, width)
-        target['landmark'] = {i: [j[0] - left, j[1] - top] for i, j in landmark.items()}
-        target['curve'] = {i: [[j[0] - left, j[1] - top] for j in target['curve'][i]] for i in target['curve']}
+        target['landmark'] = np.asarray([[i[0] - left, i[1] - top] for i in landmark])
+        target['curve'] = {i: np.asarray([[j[0] - left, j[1] - top] for j in target['curve'][i]]) for i in target['curve']}
         return img, target
 
 
@@ -267,7 +269,9 @@ class MyPad(object):
         w_pad, h_pad = 256 - w, 256 - h
         if data_type == 'val':
             pad_size = [w_pad // 2, h_pad // 2, w_pad - w_pad // 2, h_pad - h_pad // 2]
-            target['landmark'] = {i: [j[0] + w_pad // 2, j[1] + h_pad // 2] for i, j in target['landmark'].items()}
+            target['landmark'] = [[i[0] + w_pad // 2, i[1] + h_pad // 2] for i in target['landmark']]
+            target['curve'] = {i: [[j[0] + w_pad // 2, j[1] + h_pad // 2] for j in target['curve'][i]] for i in
+                               target['curve']}
         elif data_type == 'test':
             pad_size = [0, 0, w_pad, h_pad]
         else:  # train 可以用各种填充方式
@@ -277,7 +281,9 @@ class MyPad(object):
             else:
                 w_pad_r, h_pad_r = int(w_pad / 2), int(h_pad / 2)
             pad_size = [w_pad_r, h_pad_r, w_pad - w_pad_r, h_pad - h_pad_r]
-            target['landmark'] = {i: [j[0] + w_pad_r, j[1] + h_pad_r] for i, j in target['landmark'].items()}
+            target['landmark'] = [[i[0] + w_pad_r, i[1] + h_pad_r] for i in target['landmark']]
+            target['curve'] = {i: [[j[0] + w_pad_r, j[1] + h_pad_r] for j in target['curve'][i]] for i in
+                               target['curve']}
 
         img = F.pad(img, pad_size, fill=0)
         target['mask'] = F.pad(target['mask'], pad_size, fill=255)
@@ -364,3 +370,122 @@ class PepperNoise(object):
             img = F.to_pil_image(img_)
         return img, mask
 
+
+def affine_points(pt, t):
+    ones = np.ones((pt.shape[0], 1), dtype=float)
+    pt = np.concatenate([pt, ones], axis=1).T
+    new_pt = np.dot(t, pt)
+    return new_pt.T
+
+
+class AffineTransform(object):
+    """scale+rotation"""
+    # 仿射变换最重要的是计算变换矩阵
+    # opencv可以根据三个点变换前后的对应关系自动求解：cv2.getAffineTransform(pos1,pos2)
+    # 然后使用cv2.warpAffine()进行仿射变换
+    def __init__(self,
+                 scale: Tuple[float, float] = None,  # e.g. (0.65, 1.35)
+                 rotation: Tuple[int, int] = None,   # e.g. (-45, 45)
+                 input_size: Tuple[int, int] = (192, 256),
+                 resize_low_high=(1, 1),
+                 heatmap_shrink_rate: int = 1):
+        self.scale = scale
+        self.rotation = rotation
+        self.input_size = input_size
+        self.heatmap_shrink_rate = heatmap_shrink_rate
+        self.resize_low_high = resize_low_high
+
+    def __call__(self, img, target):
+        resize_ratio = np.random.uniform(*self.resize_low_high)
+        src_xmax, src_xmin, src_ymax, src_ymin = img.size[0], 0, img.size[1], 0
+        self.input_size = [int(src_ymax/src_xmax*(256*resize_ratio)), int(256*resize_ratio)] if src_xmax > src_ymax \
+            else [int(256*resize_ratio), int(src_xmax/src_ymax*(256*resize_ratio))]
+
+        src_w = src_xmax - src_xmin
+        src_h = src_ymax - src_ymin
+        src_center = np.array([(src_xmin + src_xmax) / 2, (src_ymin + src_ymax) / 2])
+        src_p2 = src_center + np.array([0, -src_h / 2])  # top middle
+        src_p3 = src_center + np.array([src_w / 2, 0])   # right middle
+
+        dst_center = np.array([(self.input_size[1] - 1) / 2, (self.input_size[0] - 1) / 2])
+        dst_p2 = np.array([(self.input_size[1] - 1) / 2, 0])  # top middle
+        dst_p3 = np.array([self.input_size[1] - 1, (self.input_size[0] - 1) / 2])  # right middle
+
+        if self.scale is not None:
+            # scale < 1, 图像放大，区域内显示的图形内容变少， scale > 1，图像缩小，区域内显示的图像内容变多（填充黑边）
+            scale = random.uniform(*self.scale)
+            src_w = src_w * scale
+            src_h = src_h * scale
+            src_p2 = src_center + np.array([0, -src_h / 2])  # top middle
+            src_p3 = src_center + np.array([src_w / 2, 0])   # right middle
+
+        if self.rotation is not None:
+            angle = random.randint(*self.rotation)  # 角度制
+            angle = angle / 180 * math.pi  # 弧度制
+            src_p2 = src_center + np.array([src_h / 2 * math.sin(angle), -src_h / 2 * math.cos(angle)])
+            src_p3 = src_center + np.array([src_w / 2 * math.cos(angle), src_w / 2 * math.sin(angle)])
+
+        src = np.stack([src_center, src_p2, src_p3]).astype(np.float32)
+        dst = np.stack([dst_center, dst_p2, dst_p3]).astype(np.float32)
+
+        trans = cv2.getAffineTransform(src, dst)  # 计算正向仿射变换矩阵
+        dst /= self.heatmap_shrink_rate  # 网络预测的heatmap尺寸是输入图像的1/4
+        reverse_trans = cv2.getAffineTransform(dst, src)  # 计算逆向仿射变换矩阵，方便后续还原
+
+        # 对图像进行仿射变换
+        resize_img = cv2.warpAffine(np.array(img),
+                                    trans,
+                                    tuple(self.input_size[::-1]),  # [w, h]
+                                    flags=cv2.INTER_LINEAR)
+        target['mask'] = cv2.warpAffine(np.array(target['mask']), trans, tuple(self.input_size[::-1]),
+                                          flags=cv2.INTER_NEAREST)
+        target["landmark"] = affine_points(target["landmark"], trans)
+        for i in target['curve']:
+            target['curve'][i] = affine_points(target['curve'][i], trans)
+        target['landmark'] = target['landmark'] / self.heatmap_shrink_rate
+
+        # import matplotlib.pyplot as plt
+        # from draw_utils import draw_keypoints
+        # resize_img = draw_keypoints(resize_img, target["keypoints"])
+        # plt.imshow(resize_img)
+        # plt.show()
+
+        target["trans"] = trans
+        target["reverse_trans"] = reverse_trans
+        return resize_img, target
+
+
+class CreateGTmask(object):
+    def __init__(self, hm_var, hm_max=8):
+        """生成训练的GT mask"""
+        self.hm_var = hm_var
+        self.hm_max = hm_max
+
+    def __call__(self, img, target):
+        landmark = target['landmark']
+        num_classes = target['num_classes']
+        # 生成mask, landmark的误差在int()处
+        landmark = [[int(i[0]+0.5), int(i[1]+0.5)] for i in landmark]
+        mask_num = 6 if target['num_classes'] == 6 else target['num_classes'] - 4
+        mask = np.zeros((mask_num, *target['mask'].shape), dtype=np.float)
+        # 根据landmark 绘制高斯热图 （进行点分割）
+        # heatmap 维度为 c,h,w 因为ToTensor会将Image(c.w,h)也变为(c,h,w)
+        if num_classes == 6 or num_classes == 11:
+            for label, point in enumerate(landmark):
+                if all([True if i > 0 else False for i in point]):
+                    temp_heatmap = make_2d_heatmap(point, target['mask'].shape, var=self.hm_var, max_value=self.hm_max)
+                    mask[label] = temp_heatmap
+        # todo 优化，poly的信息可以集中在一个通道里，求loss时用one hot分离
+        if num_classes == 5 or num_classes == 11:
+            num_poly_mask = target['num_classes'] - 5
+            mask[num_poly_mask] = target['mask']
+            for label, temp_curve in target['curve'].items():
+                cruve = [[int(i[0]+0.5), int(i[1]+0.5)] for i in temp_curve if i[0] > 0 and i[1] > 0]
+                for j in range(len(cruve) - 1):
+                    cv2.line(mask[num_poly_mask], cruve[j], cruve[j + 1], color=label-3, thickness=2)
+        # 将mask中，landmark左侧的target置为0
+        # for i in range(6):
+        #     y, x = np.where(mask[i] == mask[i].max())
+        #     mask[i, :, :x[0]] = 0
+        target['mask'] = mask
+        return img, target

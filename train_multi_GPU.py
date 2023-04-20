@@ -13,7 +13,7 @@ from yanMianDataset import YanMianDataset
 
 
 class SegmentationPresetTrain:
-    def __init__(self, base_size, crop_size, hflip_prob=0.5, vflip_prob=0.5,
+    def __init__(self, base_size, crop_size, hflip_prob=0.5, vflip_prob=0.5, hm_var=40,
                  mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
         min_size = int(0.8 * base_size)
         max_size = int(1 * base_size)
@@ -27,10 +27,12 @@ class SegmentationPresetTrain:
         #     trans.append(T.RandomHorizontalFlip(hflip_prob))
         trans.extend([
             T.GetROI(border_size=30),
-            T.RandomResize(min_size, max_size, resize_ratio=1, shrink_ratio=1),
+            # T.RandomResize(min_size, max_size, resize_ratio=1, shrink_ratio=1),
+            T.AffineTransform(rotation=(-10, 10), input_size=args.input_size, resize_low_high=[0.8, 1],
+                              heatmap_shrink_rate=args.heatmap_shrink_rate),
             T.RandomHorizontalFlip(0.5),
             T.RandomVerticalFlip(0.5),
-            # T.RandomRotation(10, rotate_ratio=0.7, expand_ratio=0.7),
+            T.CreateGTmask(hm_var=hm_var),
             T.ToTensor(),
             T.Normalize(mean=mean, std=std),
             T.MyPad(size=256),
@@ -43,10 +45,12 @@ class SegmentationPresetTrain:
 
 
 class SegmentationPresetEval:
-    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40):
         self.transforms = T.Compose([
             T.GetROI(border_size=30),
-            T.RandomResize(256, 256, shrink_ratio=0),
+            T.AffineTransform(input_size=args.input_size, heatmap_shrink_rate=args.heatmap_shrink_rate),
+            # T.RandomResize(256, 256, shrink_ratio=0),
+            T.CreateGTmask(hm_var=hm_var),
             T.ToTensor(),
             T.Normalize(mean=mean, std=std),
             T.MyPad(size=256),
@@ -56,14 +60,14 @@ class SegmentationPresetEval:
         return self.transforms(img, target)
 
 
-def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40):
     base_size = 256
     crop_size = 480
 
     if train:
-        return SegmentationPresetTrain(base_size, crop_size, mean=mean, std=std)
+        return SegmentationPresetTrain(base_size, crop_size, mean=mean, std=std, hm_var=hm_var)
     else:
-        return SegmentationPresetEval(mean=mean, std=std)
+        return SegmentationPresetEval(mean=mean, std=std, hm_var=hm_var)
 
 
 def main(args):
@@ -87,12 +91,11 @@ def main(args):
     # name = output_dir.split('/')[-1]
     results_file = output_dir + '/' + "log.txt"
 
-    var = 40
-    train_dataset = YanMianDataset(args.data_path, data_type='train', num_classes=num_classes, var=var,
-                                   transforms=get_transform(train=True, mean=mean, std=std), resize=[256, 256])
-
-    val_dataset = YanMianDataset(args.data_path, data_type='val', num_classes=num_classes, var=var,
-                                 transforms=get_transform(train=False, mean=mean, std=std), resize=[256, 256])
+    var = args.hm_var
+    train_dataset = YanMianDataset(args.data_path, data_type='train', num_classes=num_classes,
+                                   transforms=get_transform(train=True, mean=mean, std=std, hm_var=var))
+    val_dataset = YanMianDataset(args.data_path, data_type='val', num_classes=num_classes,
+                                 transforms=get_transform(train=False, mean=mean, std=std, hm_var=var))
 
     print("Creating data loaders")
     # 将数据打乱后划分到不同的gpu上
@@ -322,6 +325,7 @@ def parse_args():
     parser.add_argument('-b', '--batch_size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--random_seed', default=0, type=int, help='set random seed')
+    parser.add_argument('--hm_var', default=40, type=int, help='heatmap var set')
 
     '''model setting'''
     # parser.add_argument('--deep_supervision', default=False, type=str2bool)
