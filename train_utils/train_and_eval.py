@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 import train_utils.distributed_utils as utils
-from .dice_coefficient_loss import dice_loss
+from .dice_coefficient_loss import dice_loss, build_target
 from train_utils.init_model_utils import warmup_lr_scheduler
 
 
@@ -18,11 +18,11 @@ def criterion(inputs, target, num_classes: int = 2, ignore_index: int = -100, we
 
     if num_classes == 11 or num_classes == 5:
         # 针对每个类别，背景，前景都需要计算他的dice系数
-        # 根据gt构建每个类别的矩阵
-        # dice_target = build_target(target, num_classes, ignore_index)  # B * C* H * W
-        # 计算两区域和两曲线的dice
         class_index = 0 if num_classes == 5 else 6
-        losses['dice_loss'] += (dice_loss(inputs[:, class_index:, :], target[:, class_index:, :], multiclass=True,
+        # 根据gt构建每个类别的矩阵
+        dice_target = build_target(target[:, class_index, :], 5, ignore_index)  # B * C* H * W
+        # 计算两区域和两曲线的dice
+        losses['dice_loss'] += (dice_loss(inputs[:, class_index:, :], dice_target, multiclass=True,
                                           ignore_index=ignore_index))
     if num_classes == 11 or num_classes == 6:
         if ignore_index > 0:
@@ -60,7 +60,6 @@ def evaluate(model, data_loader, device, num_classes, weight=1):
             # 计算 loss 和 metric
             # 点定位计算mse loss 和 mse 的metric； 分割计算dice
             if num_classes == 11 or num_classes == 6:
-                mask = target['mask'].to(output.device)
                 roi_mask = torch.ne(mask[:, :6, :], 255)
                 pre = output[:, :6, :][roi_mask]
                 target_ = mask[:, :6, :][roi_mask]
@@ -69,12 +68,12 @@ def evaluate(model, data_loader, device, num_classes, weight=1):
                 for i, data in enumerate(output[0, :6, :]):
                     data = data.to('cpu').detach()
                     y, x = np.where(data == data.max())
-                    point = target['landmark'][0][i + 8]  # label=i+8
+                    point = target['landmark'][0][i]  # label=i+8
                     mse[i + 8].append(math.sqrt(math.pow(x[0] - point[0], 2) + math.pow(y[0] - point[1], 2)))
-            if num_classes == 11:
-                loss['dice_loss'] += (dice_loss(output[:, 6:, :], mask[:, 6:, :], multiclass=True, ignore_index=255))
-            if num_classes == 5:
-                loss['dice_loss'] += (dice_loss(output, mask, multiclass=True, ignore_index=255))
+            if num_classes == 11 or num_classes == 5:
+                class_index = 0 if num_classes == 5 else 6
+                dice_target = build_target(mask[:, class_index, :], 5, 255)  # B * C* H * W
+                loss['dice_loss'] += (dice_loss(output[:, class_index:, :], dice_target, multiclass=True, ignore_index=255))
 
     loss = {i: j / len(data_loader) for i, j in loss.items()}
     m_mse = []

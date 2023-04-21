@@ -9,21 +9,19 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 from data_utils.init_data import check_data
-from data_utils.init_anno import get_anno, get_mask, create_GTmask
+from data_utils.init_anno import get_anno, get_mask
 from transforms import GetROI, MyPad
 from torchvision.transforms.functional import resize
 
 
 class YanMianDataset(Dataset):
     def __init__(self, root: str, transforms=None, data_type: str = 'train', resize=None, ki=-1, k=5, json_path=None,
-                 mask_path=None, txt_path=None, num_classes=6, var=1):
+                 mask_path=None, txt_path=None, num_classes=6):
         assert data_type in ['train', 'val', 'test'], "data_type must be in ['train', 'val', 'test']"
         assert num_classes in [5, 6, 11]
         self.root = root
         self.transforms = transforms
-        self.resize = resize
         self.json_list = []
-        self.var = var
         self.data_type = data_type
         self.num_classes = num_classes
         self.run_env = '/' if '/data/' in os.getcwd() else '\\'
@@ -95,17 +93,15 @@ class YanMianDataset(Dataset):
 
         # get polygon mask
         mask_path = os.path.join(self.mask_path, json_dir.split('/')[-1].split('.')[0] + '_mask_255.jpg')
-        poly_curve = get_mask(mask_path, curve)
-        poly_curve = torch.as_tensor(poly_curve)
+        bone_mask = get_mask(mask_path)
 
         roi_box = roi_boxes[json_dir] if self.data_type == 'test' else None
-        target = {'landmark': landmark, 'mask': poly_curve, 'curve': curve, 'data_type': self.data_type,
-                  'num_classes': self.num_classes, 'roi_box': roi_box, 'hm_var': self.var, 'img_name': img_name}
+        target = {'landmark': landmark, 'mask': bone_mask, 'curve': curve, 'data_type': self.data_type,
+                  'num_classes': self.num_classes, 'roi_box': roi_box, 'img_name': img_name}
         # transforms
         roi_img, target = self.transforms(origin_image, target)
 
         # 生成Gt mask
-        target = create_GTmask(target)
         if self.data_type == 'test':
             origin_image = resize(origin_image, [int(origin_image.size[1] * target['resize_ratio']),
                                                  int(origin_image.size[0] * target['resize_ratio'])])
@@ -132,14 +128,14 @@ def cat_list(images, fill_value=0):
     return batched_imgs
 
 
-def towards_right(img, landmarks):
+def towards_right(img=None, landmarks=None):
     """
     根据标记点位于图像的方位判断是否需要水平翻转
     若有三分之二的landmark位于图像右上则翻转
     """
     num = 0
-    nasion = landmarks[13]
-    for i in range(8, 13):
+    nasion = landmarks[5]
+    for i in range(5):
         if landmarks[i][0] > nasion[0]:
             num += 1
     if num >= 3:
@@ -149,19 +145,19 @@ def towards_right(img, landmarks):
 
 if __name__ == '__main__':
     import transforms as T
+
     import matplotlib.pyplot as plt
-    mydata = YanMianDataset('./datas', data_type='train', num_classes=11, transforms=T.Compose(
+    mydata = YanMianDataset('./datas', data_type='val', num_classes=11, transforms=T.Compose(
         [T.GetROI(border_size=30),
-         T.RandomResize(int(0.8 * 256), 256, resize_ratio=1, shrink_ratio=1),
-         T.RandomHorizontalFlip(0.5),
-         T.RandomVerticalFlip(0.5),
+         T.AffineTransform(input_size=(256, 256)),
+         T.CreateGTmask(hm_var=40),
          # T.RandomRotation(10, rotate_ratio=0.7, expand_ratio=0.7),
          T.ToTensor(),
          T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
          T.MyPad(size=256)
          ]))
     for i in range(len(mydata)):
-        a, b = mydata[i]
+        img, target= mydata[i]
         print(i)
 
 

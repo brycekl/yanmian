@@ -5,10 +5,10 @@ import torch.nn as nn
 
 def build_target(target: torch.Tensor, num_classes: int = 2, ignore_index: int = -100):
     """build target for dice coefficient"""
-    dice_target = target.clone()
+    dice_target = target.clone().type(torch.int64)
     # 此处， ignore_index 为255（忽略）
     if ignore_index >= 0:
-        ignore_mask = torch.eq(target, ignore_index)
+        ignore_mask = torch.eq(dice_target, ignore_index)
         dice_target[ignore_mask] = 0
         # 将整个Gt，根据类别转化为ont-hot编码
         dice_target = nn.functional.one_hot(dice_target, num_classes).float()  # [N, H, W] -> [N, H, W, C]
