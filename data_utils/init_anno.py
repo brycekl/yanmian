@@ -5,6 +5,7 @@ import torch
 
 
 def get_anno(json_data, landmark_num=6):
+    # 获取json里标注的关键点和曲线信息
     temp_curve = json_data['Models']['PolygonModel2']  # list   [index]['Points']
     curve = []
     # 去除标curve时多标的点

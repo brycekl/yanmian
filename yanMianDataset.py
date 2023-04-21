@@ -2,15 +2,11 @@ import json
 import os
 import random
 
-import cv2
-import numpy as np
-import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
 from data_utils.init_data import check_data
 from data_utils.init_anno import get_anno, get_mask
-from transforms import GetROI, MyPad
 from torchvision.transforms.functional import resize
 
 
@@ -144,20 +140,16 @@ def towards_right(img=None, landmarks=None):
 
 
 if __name__ == '__main__':
-    import transforms as T
+    from transforms import get_transform
+    mean = (0.2281, 0.2281, 0.2281)
+    std = (0.2313, 0.2313, 0.2313)
+    data_type = 'train'
+    data_type_ = True if data_type == 'train' else False
 
-    import matplotlib.pyplot as plt
-    mydata = YanMianDataset('./datas', data_type='val', num_classes=11, transforms=T.Compose(
-        [T.GetROI(border_size=30),
-         T.AffineTransform(input_size=(256, 256)),
-         T.CreateGTmask(hm_var=40),
-         # T.RandomRotation(10, rotate_ratio=0.7, expand_ratio=0.7),
-         T.ToTensor(),
-         T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-         T.MyPad(size=256)
-         ]))
+    mydata = YanMianDataset('./datas', data_type=data_type, num_classes=11,
+                            transforms=get_transform(train=data_type_, mean=mean, std=std, hm_var=40))
     for i in range(len(mydata)):
-        img, target= mydata[i]
+        img, target = mydata[i]
         print(i)
 
 

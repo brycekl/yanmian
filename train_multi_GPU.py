@@ -4,70 +4,11 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import random
 
-import transforms as T
 from torch.utils.tensorboard import SummaryWriter
 from train_utils import *
+from transforms import get_transform
 from yanMianDataset import YanMianDataset
-
-
-class SegmentationPresetTrain:
-    def __init__(self, base_size, crop_size, hflip_prob=0.5, vflip_prob=0.5, hm_var=40,
-                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
-        min_size = int(0.8 * base_size)
-        max_size = int(1 * base_size)
-
-        # 这些transforms都是自己写的  T.RandomResize(min_size, max_size)
-        # 将图片左边和右边裁去1/6，下方裁去1/3
-        # trans = [T.MyCrop(left_size=1/6,right_size=1/6, bottom_size=1/3)]
-        # trans = [T.RightCrop(2/3)]
-        trans = []
-        # if hflip_prob > 0:
-        #     trans.append(T.RandomHorizontalFlip(hflip_prob))
-        trans.extend([
-            T.GetROI(border_size=30),
-            # T.RandomResize(min_size, max_size, resize_ratio=1, shrink_ratio=1),
-            T.AffineTransform(rotation=(-10, 10), input_size=args.input_size, resize_low_high=[0.8, 1],
-                              heatmap_shrink_rate=args.heatmap_shrink_rate),
-            T.RandomHorizontalFlip(0.5),
-            T.RandomVerticalFlip(0.5),
-            T.CreateGTmask(hm_var=hm_var),
-            T.ToTensor(),
-            T.Normalize(mean=mean, std=std),
-            T.MyPad(size=256),
-        ])
-
-        self.transforms = T.Compose(trans)
-
-    def __call__(self, img, target):
-        return self.transforms(img, target)
-
-
-class SegmentationPresetEval:
-    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40):
-        self.transforms = T.Compose([
-            T.GetROI(border_size=30),
-            T.AffineTransform(input_size=args.input_size, heatmap_shrink_rate=args.heatmap_shrink_rate),
-            # T.RandomResize(256, 256, shrink_ratio=0),
-            T.CreateGTmask(hm_var=hm_var),
-            T.ToTensor(),
-            T.Normalize(mean=mean, std=std),
-            T.MyPad(size=256),
-        ])
-
-    def __call__(self, img, target):
-        return self.transforms(img, target)
-
-
-def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40):
-    base_size = 256
-    crop_size = 480
-
-    if train:
-        return SegmentationPresetTrain(base_size, crop_size, mean=mean, std=std, hm_var=hm_var)
-    else:
-        return SegmentationPresetEval(mean=mean, std=std, hm_var=hm_var)
 
 
 def main(args):
@@ -92,10 +33,14 @@ def main(args):
     results_file = output_dir + '/' + "log.txt"
 
     var = args.hm_var
-    train_dataset = YanMianDataset(args.data_path, data_type='train', num_classes=num_classes,
-                                   transforms=get_transform(train=True, mean=mean, std=std, hm_var=var))
-    val_dataset = YanMianDataset(args.data_path, data_type='val', num_classes=num_classes,
-                                 transforms=get_transform(train=False, mean=mean, std=std, hm_var=var))
+    train_dataset = YanMianDataset(
+        args.data_path, data_type='train', num_classes=num_classes,
+        transforms=get_transform(train=True, mean=mean, std=std, hm_var=var, input_size=args.input_size,
+                                 hm_shrink_rate=args.hm_shrink_rate))
+    val_dataset = YanMianDataset(
+        args.data_path, data_type='val', num_classes=num_classes,
+        transforms=get_transform(train=False, mean=mean, std=std, hm_var=var, input_size=args.input_size,
+                                 hm_shrink_rate=args.hm_shrink_rate))
 
     print("Creating data loaders")
     # 将数据打乱后划分到不同的gpu上
@@ -321,7 +266,7 @@ def parse_args():
     parser.add_argument('--num_classes2', default=0, type=int, help='number of classes')  # 0 / 5
     parser.add_argument('--output_dir', default='./models', help='path where to save')
     parser.add_argument('--model_name', default='unet', help='the model name')
-    parser.add_argument('--heatmap_shrink_rate', default=1, type=int)  # hrnet最后没有复原为原图大小
+    parser.add_argument('--hm_shrink_rate', default=1, type=int)  # hrnet最后没有复原为原图大小
     parser.add_argument('-b', '--batch_size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--random_seed', default=0, type=int, help='set random seed')

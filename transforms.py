@@ -11,6 +11,67 @@ from torchvision import transforms as T
 from torchvision.transforms import functional as F
 
 
+class SegmentationPresetTrain:
+    def __init__(self, base_size, hm_var=40, input_size=(256, 256), heatmap_shrink_rate=1,
+                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+        min_size = int(0.8 * base_size)
+        max_size = int(1 * base_size)
+
+        # 这些transforms都是自己写的  RandomResize(min_size, max_size)
+        # 将图片左边和右边裁去1/6，下方裁去1/3
+        # trans = [MyCrop(left_size=1/6,right_size=1/6, bottom_size=1/3)]
+        # trans = [RightCrop(2/3)]
+        trans = []
+        # if hflip_prob > 0:
+        #     trans.append(RandomHorizontalFlip(hflip_prob))
+        trans.extend([
+            GetROI(border_size=30),
+            # RandomResize(min_size, max_size, resize_ratio=1, shrink_ratio=1),
+            AffineTransform(rotation=(-20, 30), input_size=input_size, resize_low_high=[0.8, 1],
+                            heatmap_shrink_rate=heatmap_shrink_rate),
+            RandomHorizontalFlip(0.5),
+            RandomVerticalFlip(0.5),
+            CreateGTmask(hm_var=hm_var),
+            ToTensor(),
+            Normalize(mean=mean, std=std),
+            MyPad(size=256),
+        ])
+
+        self.transforms = Compose(trans)
+
+    def __call__(self, img, target):
+        return self.transforms(img, target)
+
+
+class SegmentationPresetEval:
+    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40, input_size=(256, 256),
+                 heatmap_shrink_rate=1):
+        self.transforms = Compose([
+            GetROI(border_size=30),
+            AffineTransform(input_size=input_size, heatmap_shrink_rate=heatmap_shrink_rate),
+            # RandomResize(256, 256, shrink_ratio=0),
+            CreateGTmask(hm_var=hm_var),
+            ToTensor(),
+            Normalize(mean=mean, std=std),
+            MyPad(size=256),
+        ])
+
+    def __call__(self, img, target):
+        return self.transforms(img, target)
+
+
+def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40, input_size=(256, 256),
+                  hm_shrink_rate=1):
+    base_size = 256
+
+    if train:
+        return SegmentationPresetTrain(base_size, mean=mean, std=std, hm_var=hm_var, input_size=input_size,
+                                       heatmap_shrink_rate=hm_shrink_rate)
+    else:
+        return SegmentationPresetEval(mean=mean, std=std, hm_var=hm_var, input_size=input_size,
+                                      heatmap_shrink_rate=hm_shrink_rate)
+
+
 def pad_if_smaller(img, size, fill=0):
     # 如果图像最小边长小于给定size，则用数值fill进行padding
     if isinstance(img, torch.Tensor):

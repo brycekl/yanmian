@@ -1,12 +1,54 @@
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=unet -b=32 --lr=0.001 --num_classes=11
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=ViT-B_16 -b=32 --lr=0.001
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=ViT-L_16 -b=32 --lr=0.001
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=R50-ViT-B_16 -b=32 --lr=0.001
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=vgg16unet -b=32 --lr=0.001
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=resnet34unet -b=32 --lr=0.001
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=unet -b=32 --lr=0.001 --num_classes=6
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=ViT-B_16 -b=32 --lr=0.001 --num_classes=6
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=ViT-L_16 -b=32 --lr=0.001 --num_classes=6
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=R50-ViT-B_16 -b=32 --lr=0.001 --num_classes=6
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=vgg16unet -b=32 --lr=0.001 --num_classes=6
-CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=resnet34unet -b=32 --lr=0.001 --num_classes=6
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=unet --lr=0.001
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=unet --lr=0.001
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=unet --lr=0.001
+
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=2 train_multi_GPU.py --model_name=unet --lr=0.001
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-B_16 --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-L_16 --lr=0.001 -b=16
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=R50-ViT-B_16 --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=vgg16unet --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=resnet34unet --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=unet --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-B_16 --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-L_16 --lr=0.001 -b=16
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=R50-ViT-B_16 --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=vgg16unet --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=resnet34unet --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=unet --lr=0.002
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-B_16 --lr=0.002
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-L_16 --lr=0.002 -b=16
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=R50-ViT-B_16 --lr=0.002
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=vgg16unet --lr=0.002
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=resnet34unet --lr=0.002
+
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=R50-ViT-B_16 -b=32 --lr=0.002
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-B_16 -b=32 --lr=0.002
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-L_16 -b=16 --lr=0.002
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=R50-ViT-B_16 -b=32 --lr=0.002 --num_classes=5
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=R50-ViT-B_16 -b=32 --lr=0.002 --num_classes=6
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-B_16 -b=32 --lr=0.002 --num_classes=6
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-L_16 -b=16 --lr=0.002 --num_classes=6
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=R50-ViT-B_16 -b=32 --lr=0.001
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=R50-ViT-B_16 -b=32 --lr=0.004
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=R50-ViT-B_16 -b=32 --lr=0.0005
+
+
+
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=vgg16unet -b=32 --lr=0.001
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=vgg16unet -b=32 --lr=0.001 --num_classes=5
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=vgg16unet -b=32 --lr=0.001 --num_classes=6
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=resnet34unet -b=32 --lr=0.001
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=resnet34unet -b=32 --lr=0.001 --num_classes=5
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=resnet34unet -b=32 --lr=0.001 --num_classes=6
+
+CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-B_16 -b=32 --lr=0.0005 --num_classes=5
+CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-B_16 -b=32 --lr=0.0005 --num_classes=6
+CUDA_VISIBLE_DEVICES=1,2 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=ViT-B_16 -b=32 --lr=0.0005 --num_classes=11
+
+
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=unet_up1 --num_classes=6 --num_classes2=5 --output_dir=models/unet_test
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=unet_up2 --num_classes=6 --num_classes2=5 --output_dir=models/unet_test
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=unet_up3 --num_classes=6 --num_classes2=5 --output_dir=models/unet_test
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=4 train_multi_GPU.py --model_name=unet_up4 --num_classes=6 --num_classes2=5 --output_dir=models/unet_test
