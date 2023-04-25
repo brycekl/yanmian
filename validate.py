@@ -44,9 +44,9 @@ def show_img(img, target, title='', save_path=None):
 def main():
     # 运行环境： windows 和 linux
     run_env = "/" if '/data/lk' in os.getcwd() else '\\'
-    weights_path = 'model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth'
+    weights_path = 'models/model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth'
     test_txt = './data_utils/test.txt'
-    save_root = './result/result_500'
+    save_root = './results/230405'
     assert os.path.exists(weights_path), f"weights {weights_path} not found."
     assert os.path.exists(test_txt), f'test.txt {test_txt} not found.'
     
@@ -93,7 +93,7 @@ def main():
     # load poly model
     model2 = True
     if model2:  # './model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/1_0.768/best_model.pth'
-        weights_poly_curve = './model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/1_0.768/best_model.pth'
+        weights_poly_curve = './models/model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/1_0.768/best_model.pth'
         # model_poly_curve = UNet(in_channels=3, num_classes=5, base_c=32)
         # model_poly_curve = VGG16UNet(num_classes=5)
         config_vit = CONFIGS_ViT_seg['R50-ViT-B_16']

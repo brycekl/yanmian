@@ -18,7 +18,7 @@ class YanMianDataset(Dataset):
                  mask_path=None, txt_path=None, num_classes=6, var=1):
         assert data_type in ['train', 'val', 'test'], "data_type must be in ['train', 'val', 'test']"
         assert num_classes in [4, 6, 10]
-        self.root = os.path.join(root, 'data')
+        self.root = os.path.join(root, 'datas')
         self.transforms = transforms
         self.resize = resize
         self.json_list = []

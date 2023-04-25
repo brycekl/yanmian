@@ -57,7 +57,7 @@ def main():
 
     # init detec model
     detec_model = create_detec_model(num_classes=2)
-    detec_weight = "../model/detec/data6_SGDlr0.02_0.9169/best_model.pth"
+    detec_weight = "../models/model/detec/data6_SGDlr0.02_0.9169/best_model.pth"
     assert os.path.exists(detec_weight), "{} file dose not exist.".format(detec_weight)
     detec_model.load_state_dict(torch.load(detec_weight, map_location=device)["model"])
     detec_model.to(device)
@@ -67,7 +67,7 @@ def main():
     # init heatmap model
     # model = UNet(in_channels=3, num_classes=classes + 1, base_c=64)
     heatmap_model = VGG16UNet(num_classes=6)
-    heatmap_weight = "../model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth"  # 127, 136
+    heatmap_weight = "../models/model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth"  # 127, 136
     assert os.path.exists(heatmap_weight), f"weights {heatmap_weight} not found."
     heatmap_model.load_state_dict(torch.load(heatmap_weight, map_location='cpu')['model'])
     heatmap_model.to(device)
@@ -75,7 +75,7 @@ def main():
     heatmap_model(init_img)
 
     # init seg model
-    seg_weight = '../model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/1_0.768/best_model.pth'
+    seg_weight = '../models/model/cross_validation/pl_SGDlr0.02_ers_b32_0.769/1_0.768/best_model.pth'
     # model_poly_curve = UNet(in_channels=3, num_classes=5, base_c=32)
     # model_poly_curve = VGG16UNet(num_classes=5)
     config_vit = CONFIGS_ViT_seg['R50-ViT-B_16']
@@ -102,7 +102,7 @@ def main():
     spacing_cm = pd.read_excel('../data_utils/data_information/spacing_values.xlsx').to_dict('list')
     spacing_cm['name'] = [i.split('.')[0] for i in spacing_cm['name']]
 
-    save_path = './result_230114'
+    save_path = './result_230425'
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
