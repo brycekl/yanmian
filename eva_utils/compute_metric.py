@@ -40,7 +40,7 @@ def get_angle_keypoint(line1, line2, h_img):
     if k1 == k2:
         for i in line1:
             for j in line2:
-                if i==j:
+                if i == j:
                     keypoint = i
         return 0, keypoint
 
@@ -56,7 +56,7 @@ def get_angle_keypoint(line1, line2, h_img):
         keypoint_y = k1 * keypoint_x + b1
 
     # assert keypoint_y == k2*keypoint_x + b2
-    keypoint = [int(keypoint_x), int(h_img-keypoint_y)]
+    keypoint = [int(keypoint_x + 0.5), int(h_img-keypoint_y + 0.5)]
 
     if (angle1 > 0 and angle2>0) or (angle1 < 0 and angle2 < 0):
         return abs(angle1-angle2), keypoint
@@ -79,7 +79,7 @@ def get_distance(line, point, h_img):
     shift_line = shift_point * math.sin(radians)
     shift_x = shift_line * math.cos(radians)
     shift_y = shift_line * math.sin(radians)
-    keypoint = [int(x+shift_x), int(h_img- line_y- shift_y)]
+    keypoint = [int(x+shift_x + 0.5), int(h_img - line_y - shift_y + 0.5)]
 
     return distance, keypoint
 
@@ -110,8 +110,8 @@ def get_biggest_distance(mask, mask_label, line, h_img):
         # 计算误差
         if -1< h_img-y - (x*k+b) < 1:
             head_points.append([x,y])
-    head_point = np.mean(head_points, axis=0, dtype=np.int)
-    return big_distance, head_point, big_keypoint
+    head_point = np.mean(head_points, axis=0)
+    return big_distance, [int(head_point[0] + 0.5), int(head_point[1] + 0.5)], big_keypoint
 
 
 def get_closest_point(mask, mask_label, point):
@@ -267,8 +267,8 @@ def get_nasion_vertical_line(mask, mask_label, nasion, h_img, towards_right: boo
     b = (h_img-nasion[1]) - k*nasion[0]
     mean_point = [np.mean(shift_w), h_img-(k*np.mean(shift_w)+b)]  # 由shift_w得到过拟合直线的一个点，用于连线
 
-    keypoint = [nasion[0]+10, int(nasion[1] + 1/k*10)]  # 垂线上用于连线的点
-    return -1/k, nasion, [int(mean_point[0]), int(mean_point[1])], keypoint
+    keypoint = [nasion[0]+10, int(nasion[1] + 1/k*10 + 0.5)]  # 垂线上用于连线的点
+    return -1/k, nasion, [int(mean_point[0] + 0.5), int(mean_point[1] + 0.5)], keypoint
 
 
 def get_contours(mask, mask_label, h_img, towards_right=True):
@@ -316,8 +316,8 @@ def get_contours(mask, mask_label, h_img, towards_right=True):
 
     x = [i for i in up_points.keys()]
     y = [j for j in up_points.values()]
-    m3_keypoint1 = [int(np.mean(x)), int(np.mean(y))]
-    poly_ = np.polyfit(x, y,1)
+    m3_keypoint1 = [np.mean(x), np.mean(y)]
+    poly_ = np.polyfit(x, y, 1)
     c_ = np.poly1d(poly_)
     m3_keypoint2 = [int(m3_keypoint1[0]+10), int(c_(m3_keypoint1[0]+10))]
 
@@ -395,5 +395,5 @@ def get_contours(mask, mask_label, h_img, towards_right=True):
     # m3_keypoint1 = box[0]
     # m3_keypoint2 = box[2] if abs(box[0][0]-box[1][0]) < abs(box[0][0]-box[2][0]) else box[1]
 
-    return m3_keypoint1, m3_keypoint2
+    return [int(m3_keypoint1[0] + 0.5), int(m3_keypoint1[1] + 0.5)], m3_keypoint2
 
