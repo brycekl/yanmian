@@ -122,12 +122,13 @@ class YanMianDataset(Dataset):
         poly_curve = torch.as_tensor(poly_curve)
         # 得到标注的ROI区域图像-->单纯裁剪
         roi_box = roi_boxes[json_dir] if self.data_type == 'test' else None
-        raw_roi_img, poly_curve, landmark, curve, roi_box = GetROI(border_size=30)(origin_image, {'mask': poly_curve, 'landmark': landmark,
-                                                                        'curve': curve, 'roi_box': roi_box})
+        raw_roi_img, poly_curve, landmark, curve, roi_box = GetROI(border_size=30)(
+            origin_image, {'mask': poly_curve, 'landmark': landmark, 'curve': curve, 'roi_box': roi_box})
 
         # Image，和tensor通道组织方式不一样，但是还可以使用同一个transform是因为它内部根据类型做了处理
         if self.transforms is not None:
-            roi_img, target = self.transforms(raw_roi_img, {'landmark': landmark, 'mask': poly_curve, 'curve': curve})
+            roi_img, target = self.transforms(raw_roi_img, {'landmark': landmark, 'mask': poly_curve, 'curve': curve,
+                                                            'data_type': self.data_type})
             roi_box = [int(i * target['resize_ratio']) for i in roi_box]
             origin_image = resize(origin_image, [int(origin_image.size[1] * target['resize_ratio']),
                                                  int(origin_image.size[0] * target['resize_ratio'])])

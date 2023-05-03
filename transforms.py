@@ -387,5 +387,7 @@ class Resize(object):
         target['mask'] = mask
         target['curve'] = curve
         target['resize_ratio'] = ratio
+        if target['data_type'] == 'test':
+            target['show_roi_img'] = image
 
         return image, target

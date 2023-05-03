@@ -19,25 +19,35 @@ def time_synchronized():
     return time.time()
 
 
-def show_img(img, target, title='', save_path=None):
-    img = np.array(img)
-    mask = target['mask']
+def show_img(img, pre_target, target, title='', save_path=None):
+    img = np.array(img) / 255
+    mask = np.argmax(target['mask'], 0) if len(target['mask'].size()) == 3 else target['mask']
     landmark = target['landmark']
-    for j in range(1, 5):
-        mask_ = np.where(mask == j)
-        img[..., 0][mask_] = j * 15 + 10
-        img[..., 1][mask_] = j * 40 + 80
-        img[..., 2][mask_] = j * 15 + 10
+    landmark = {i: [int(landmark[i][0]+0.5), int(landmark[i][1]+0.5)] for i in landmark}
+    for x_tick in range(mask.shape[0]):
+        for y_tick in range(mask.shape[1]):
+            if mask[x_tick][y_tick].item() != 0:
+                img[x_tick][y_tick][0] = img[x_tick][y_tick][0] * 0.5 + 0.5
     for i in landmark.values():
-        cv2.circle(img, i, 2, (0, 255, 0), -1)
+        cv2.circle(img, i, 2, (1, 0, 0), -1)
+
+    pre_mask = pre_target['mask']
+    pre_landmark = pre_target['landmark']
+    for x_tick in range(pre_mask.shape[0]):
+        for y_tick in range(pre_mask.shape[1]):
+            if pre_mask[x_tick][y_tick].item() != 0:
+                img[x_tick][y_tick][1] = img[x_tick][y_tick][1] * 0.5 + 0.4
+    for i in pre_landmark.values():
+        cv2.circle(img, i, 2, (0, 1, 0), -1)
+
     plt.title(title)
-    plt.imshow(img)
     if save_path:
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-        plt.imsave(os.path.join(save_path, title + '.jpg'), img)
+        plt.imsave(os.path.join(save_path, title + '.png'), img)
         plt.close()
     else:
+        plt.imshow(img)
         plt.show()
 
 
@@ -46,7 +56,7 @@ def main():
     run_env = "/" if '/data/lk' in os.getcwd() else '\\'
     weights_path = 'models/model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth'
     test_txt = './data_utils/test.txt'
-    save_root = './results/230405'
+    save_root = './results/230503'
     assert os.path.exists(weights_path), f"weights {weights_path} not found."
     assert os.path.exists(test_txt), f'test.txt {test_txt} not found.'
     
@@ -164,6 +174,13 @@ def main():
                 prediction2 = output2['out'].to('cpu')
                 # 去除Pad的数据
                 prediction2 = prediction2[:, :, :raw_h, :raw_w]
+
+                # 保存预测的热力图结果
+                if not os.path.exists(os.path.join(save_root, 'pre_heatmap')):
+                    os.makedirs(os.path.join(save_root, 'pre_heatmap'))
+                for sssj, ssss in enumerate(prediction):
+                    plt.imsave(os.path.join(save_root, 'pre_heatmap', img_name + '_' + str(sssj) + '.png'), ssss)
+
                 # 计算预测的dice
                 dice = multiclass_dice_coeff(torch.nn.functional.softmax(prediction2, dim=1),
                                              ROI_target['mask'].unsqueeze(0))
@@ -178,6 +195,8 @@ def main():
                 prediction = torch.cat((prediction2.squeeze(), prediction), dim=0)
                 pre_ROI_target, not_exist_landmark = create_predict_target(ROI_img, prediction, json_dir,
                                                                            towards_right=towards_right, deal_pre=True)
+                show_img(ROI_target['show_roi_img'], pre_ROI_target, ROI_target, title=img_name,
+                         save_path=os.path.join(save_root, 'pre_results'))
 
                 # 将ROI target 转换为原图大小
                 target = create_origin_target(ROI_target, box, original_img.size)
@@ -209,16 +228,16 @@ def main():
                     result_pre[key].append(pre_data[key])
                     result_gt[key].append(gt_data[key])
                     if pre_data[key] != 'not' and gt_data[key] != 'not':
-                        error = round(gt_data[key] - pre_data[key], 3)
-                    if key == 'IFA' and (error > 13.41 or error < -11.75):
+                        error = abs(round(gt_data[key] - pre_data[key], 3))
+                    if key == 'IFA' and (error > 13.38 or error < -11.75):
                         errorkey = 'IFA'
-                    if key == 'MNM' and (error > 4.41 or error < -3.45):
+                    if key == 'MNM' and (error > 4 or error < -3.45):
                         errorkey = 'MNM'
-                    if key == 'FMA' and (error > 10.98 or error < -10.75):
+                    if key == 'FMA' and (error > 12.485 or error < -10.75):
                         errorkey = 'FMA'
-                    if key == 'PL' and (error > 0.8 or error < -0.7):
+                    if key == 'PL' and (error > 0.793 or error < -0.7):
                         errorkey = 'PL'
-                    if key == 'FS' and (error > 2.0 or error < -2.0):
+                    if key == 'FS' and (error > 1.985 or error < -2.0):
                         errorkey = 'FS'
                     if len(errorkey) > 0:
                         save_error_path = save_root + '/error'
