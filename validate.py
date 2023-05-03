@@ -56,7 +56,7 @@ def main():
     run_env = "/" if '/data/lk' in os.getcwd() else '\\'
     weights_path = 'models/model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth'
     test_txt = './data_utils/test.txt'
-    save_root = './results/230503'
+    save_root = './results/230503_'
     assert os.path.exists(weights_path), f"weights {weights_path} not found."
     assert os.path.exists(test_txt), f'test.txt {test_txt} not found.'
     
@@ -217,9 +217,9 @@ def main():
                                                     name=img_name, save_path=save_root + '/GT')
                 if img_name in ['0110062_Yue_Guo_20170822092632751',
                                 '0115810_Cheng_Zhang_20200909143417688', '0116840_Yongping_Dai_20210203103117950']:
-                    for i in ['IFA', 'MNM', 'FMA', 'PL', 'FS']:
-                        show_one_metric(original_img, target, pre_target, i, not_exist_landmark, spa=sp_cm, box=box,
-                                        resize_ratio=resize_ratio, save_path=f'{save_root}/{img_name}')
+                    for metric in ['IFA', 'MNM', 'FMA', 'PL', 'FS']:
+                        show_one_metric(original_img, pre_target, metric, not_exist_landmark, spa=sp_cm, box=box,
+                                        resize_ratio=resize_ratio, save_path=f'{save_root}/{img_name}/{metric}.png')
                 # save results and predicted images
                 result_pre['name'].append(img_name)
                 result_gt['name'].append(img_name)
@@ -246,6 +246,8 @@ def main():
                             os.makedirs(save_error_path_)
                         pre_img.save(os.path.join(save_error_path_, img_name + '_pre_' + str(float(error)) + '.png'))
                         gt_img.save(os.path.join(save_error_path_, img_name + '_gt_' + str(float(error)) + '.png'))
+                        show_one_metric(original_img, pre_target, errorkey, not_exist_landmark, gt=target, spa=sp_cm,
+                                        box=box, resize_ratio=resize_ratio, save_path=f'{save_error_path_}/{img_name}.png')
 
     # 评估 mse误差   var100_mse_Rightcrop最佳
     for i in mse:

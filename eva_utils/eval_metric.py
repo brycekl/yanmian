@@ -3,6 +3,8 @@ import numpy as np
 from eva_utils.compute_metric import *
 import torch
 
+circle_scale = 4
+
 
 def calculate_IFA(rgb_img, mask, mask_label, not_exist_landmark, nasion, chin, upper_lip, under_lip, towards_right,
                   color=(255, 0, 0), color_point=(255, 0, 0), color_area=(200, 100, 200)):
@@ -30,7 +32,7 @@ def calculate_IFA(rgb_img, mask, mask_label, not_exist_landmark, nasion, chin, u
     cv2.line(rgb_img, chin, point_IFA, color=color, thickness=2)
     # cv2.putText(rgb_img, str(round(angle_IFA, 3)), point_IFA, cv2.FONT_HERSHEY_COMPLEX, 1.0, color=color, thickness=2)
     for i in [nasion, chin, upper_lip, under_lip]:
-        cv2.circle(rgb_img, i, 3, color_point, -1)
+        cv2.circle(rgb_img, i, circle_scale, color_point, -1)
     return angle_IFA
 
 
@@ -44,7 +46,7 @@ def calculate_MNM(rgb_img, not_exist_landmark, nasion, upper_midpoint, under_mid
     cv2.line(rgb_img, under_midpoint, nasion, color=color, thickness=2)
     # cv2.putText(rgb_img, str(round(angle_MNM, 3)), point_MNM, cv2.FONT_HERSHEY_COMPLEX, 1.0, color, 2)
     for i in [nasion, nasion, upper_midpoint, under_midpoint]:
-        cv2.circle(rgb_img, i, 3, color_point, -1)
+        cv2.circle(rgb_img, i, circle_scale, color_point, -1)
     return angle_MNM
 
 
@@ -62,7 +64,7 @@ def calculate_FMA(rgb_img, mask, mask_label, not_exist_landmark, upper_lip, chin
     # cv2.putText(rgb_img, str(round(angle_FMA, 3)), keypoint_FMA, cv2.FONT_HERSHEY_COMPLEX, 1.0, color, 2)
     # cv2.drawContours(rgb_img, contours, contourIdx=-1, color=(0, 0, 255), thickness=3)
     for i in [chin, upper_lip]:
-        cv2.circle(rgb_img, i, 3, color_point, -1)
+        cv2.circle(rgb_img, i, circle_scale, color_point, -1)
     return angle_FMA
 
 
@@ -85,7 +87,7 @@ def calculate_PL(rgb_img, mask, mask_label, not_exist_landmark, under_midpoint, 
     # cv2.putText(rgb_img, str(round(big_distance, 3)), mid_point, cv2.FONT_HERSHEY_COMPLEX, 1.0, color, 2)
     # cv2.putText(rgb_img, str(position), mid_point, cv2.FONT_HERSHEY_COMPLEX, 1.0, color, 2)
     for i in [under_midpoint, nasion]:
-        cv2.circle(rgb_img, i, 3, color_point, -1)
+        cv2.circle(rgb_img, i, circle_scale, color_point, -1)
     return big_distance, position, big_head_point
 
 def calculate_MML(rgb_img, mask, mask_label, not_exist_landmark, under_midpoint, upper_midpoint, big_head_point,
@@ -109,7 +111,7 @@ def calculate_MML(rgb_img, mask, mask_label, not_exist_landmark, under_midpoint,
     # cv2.putText(rgb_img, str(round(distance, 3)), mid_point, cv2.FONT_HERSHEY_COMPLEX, 1.0, color, 2)
     # cv2.putText(rgb_img, str(position), mid_point, cv2.FONT_HERSHEY_COMPLEX, 1.0, color, 2)
     for i in [under_midpoint, upper_midpoint]:
-        cv2.circle(rgb_img, i, 3, color_point, -1)
+        cv2.circle(rgb_img, i, circle_scale, color_point, -1)
     return distance, position
 
 
