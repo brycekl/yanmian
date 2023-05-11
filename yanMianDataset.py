@@ -2,11 +2,12 @@ import json
 import os
 import random
 
+import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
 
 from data_utils.init_data import check_data
-from data_utils.init_anno import get_anno, get_mask
+from data_utils.init_GT import *
 from torchvision.transforms.functional import resize
 
 
@@ -57,6 +58,10 @@ class YanMianDataset(Dataset):
         if self.run_env == '\\':
             self.json_list = [i.replace('\\jsons\\', '/jsons/') for i in self.json_list]
 
+        # get all metric info
+        angles_info = pd.read_excel('data_utils/data_information/result_gt_2370_mm.xlsx').to_dict('list')
+        self.angles_info = angles_info
+
     def __len__(self):
         return len(self.json_list)
 
@@ -96,6 +101,8 @@ class YanMianDataset(Dataset):
                   'num_classes': self.num_classes, 'roi_box': roi_box, 'img_name': img_name}
         # transforms
         roi_img, target = self.transforms(origin_image, target)
+        # 获取角度与其他信息
+        target['GT_info'] = get_angles(self.angles_info, img_name.split('.')[0])
 
         # 生成Gt mask
         if self.data_type == 'test':
@@ -112,6 +119,7 @@ class YanMianDataset(Dataset):
         batched_targets = {'landmark': [i['landmark'] for i in targets]}
         batched_targets['img_name'] = [i['img_name'] for i in targets]
         batched_targets['mask'] = cat_list(mask, fill_value=255)
+        batched_targets['angle_info'] = np.asarray([i['GT_info'] for i in targets])
         return batched_imgs, batched_targets
 
 

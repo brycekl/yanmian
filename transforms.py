@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from typing import Tuple
 from PIL import Image
-from data_utils.init_anno import make_2d_heatmap
+from data_utils.init_GT import make_2d_heatmap
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
 

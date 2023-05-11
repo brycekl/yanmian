@@ -58,3 +58,12 @@ def make_2d_heatmap(landmark, size, var=5.0, max_value=None):
     if max_value is not None:
         heatmap = heatmap * max_value
     return heatmap
+
+
+def get_angles(angles_info, img_name):
+    angles = [0] * 5
+    angle_idx = {j: i for i, j in enumerate(['IFA', 'MNM', 'FMA', 'FS', 'PL'])}
+    idx = angles_info['name'].index(img_name)
+    for metric in angle_idx:
+        angles[angle_idx[metric]] = angles_info[metric][idx]
+    return angles
