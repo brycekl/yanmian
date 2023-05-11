@@ -60,6 +60,21 @@ def create_model(num_classes_1, num_classes_2=0, in_channel=3, base_c=32, model_
                 int(256 / 16), int(256 / 16))
         model = src.TransUNet(vit_config, img_size=kwargs['input_size'], num_classes=num_classes_1)
 
+    # 下面是分类模型
+    elif model_name.find('resnet') != -1:
+        assert model_name in ['resnet_34', 'resnet_50', 'resnet_101']
+        model = src.resnet[model_name](num_classes_1)
+    elif model_name.find('densenet') != -1:
+        assert model_name in ['densenet_121', 'densenet_161', 'densenet_169', 'densenet_201']
+        model = src.densenet[model_name](num_classes=num_classes_1)
+    elif model_name.find('efficientnetv2') != -1:
+        assert model_name in ['efficientnetv2_s', 'efficientnetv2_m', 'efficientnetv2_l']
+        model = src.efficientnetv2[model_name](num_classes=num_classes_1)
+    elif model_name.find('efficientnet') != -1:
+        assert model_name in ['efficientnet_b' + str(i) for i in range(8)]
+        model = src.efficientnet[model_name](num_classes=num_classes_1)
+    elif model_name.find('MobileNetV2') != -1:
+        model = src.MobileNetV2(num_classes=num_classes_1)
     # model = HighResolutionNet(num_joints=num_classes, base_channel=base_c)
     print('create {} model successfully.'.format(model_name))
     return model

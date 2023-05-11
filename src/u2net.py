@@ -224,8 +224,8 @@ def convert_onnx(m, save_path):
 
 
 u2net_list = {
-    'u2net_lite': u2net_lite(),
-    'u2net_full': u2net_full(),
+    'u2net_lite': u2net_lite,
+    'u2net_full': u2net_full,
 }
 
 
