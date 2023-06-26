@@ -1,5 +1,5 @@
 from .mobilenet_unet import MobileV3Unet
-from .unet import UNet
+from .unet import UNet, UnetFusion
 import os
 if '/data/' in os.getcwd():
     from .u2net import u2net_list

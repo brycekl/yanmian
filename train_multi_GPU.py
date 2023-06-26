@@ -28,9 +28,9 @@ def main(args):
     model_name = args.model_name
     output_dir = args.output_dir
 
-    # 用来保存coco_info的文件
-    # name = output_dir.split('/')[-1]
+    # 保存log和model的位置
     results_file = output_dir + '/' + "log.txt"
+    model_txt = output_dir + '/' + 'model.txt'
 
     var = args.hm_var
     train_dataset = YanMianDataset(
@@ -64,6 +64,9 @@ def main(args):
     model = create_model(num_classes_1=num_classes1, num_classes_2=num_classes2, in_channel=3, base_c=32,
                          model_name=model_name, input_size=args.input_size)
     model.to(device)
+    with open(model_txt, 'w') as file:
+        # 写入字符串到文件
+        file.write(str(model))
 
     if args.sync_bn:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -335,8 +338,8 @@ if __name__ == "__main__":
         mkdir(args.output_dir)
 
     # 如果没有分开的decoder标志 ’up'，则将num_classes2置0
-    if args.model_name.find('up') == -1 and args.num_classes2 != 0:
-        args.num_classes, args.num_classes2 = args.num_classes + args.num_classes2, 0
+    # if args.model_name.find('up') == -1 and args.num_classes2 != 0:
+    #     args.num_classes, args.num_classes2 = args.num_classes + args.num_classes2, 0
 
     # 写入文件
     with open(os.path.join(args.output_dir, 'config.yml'), 'w') as f:
