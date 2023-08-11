@@ -445,11 +445,11 @@ class AffineTransform(object):
     # opencv可以根据三个点变换前后的对应关系自动求解：cv2.getAffineTransform(pos1,pos2)
     # 然后使用cv2.warpAffine()进行仿射变换
     def __init__(self,
-                 scale: Tuple[float, float] = None,  # e.g. (0.65, 1.35)
-                 rotation: Tuple[int, int] = None,   # e.g. (-45, 45)
-                 input_size: Tuple[int, int] = (192, 256),
-                 resize_low_high=(1, 1),
-                 heatmap_shrink_rate: int = 1):
+                 scale: Tuple[float, float] = None,  # e.g. (0.65, 1.35) 将图片放大或缩小的比例
+                 rotation: Tuple[int, int] = None,   # e.g. (-45, 45)  将图片选择的角度
+                 input_size: Tuple[int, int] = (192, 256),  # 输入网络的图片大小
+                 resize_low_high=(1, 1),  # 对输入网络的大小resize，其他部分填充
+                 heatmap_shrink_rate: int = 1):  # heatmap缩小尺寸，如hrnet会将预测的heatmap缩小
         self.scale = scale
         self.rotation = rotation
         self.input_size = input_size

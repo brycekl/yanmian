@@ -52,6 +52,8 @@ def create_model(num_classes_1, num_classes_2=0, in_channel=3, base_c=32, model_
     elif model_name == 'unetFusion':
         model = src.UnetFusion(in_channels=in_channel, num_classes=num_classes_1, num_classes_2=num_classes_2, base_c=base_c,
                          model_name=model_name)
+    elif model_name == 'multiResUnet':
+        model = src.MultiResUnet(in_channel, num_classes_1)
     elif model_name.find('ViT') != -1:
         assert model_name in ['ViT-B_16', 'ViT-B_32', 'ViT-L_16', 'ViT-L_32', 'ViT-H_14', 'R50-ViT-B_16', 'R50-ViT-L_16']
         vit_config = src.CONFIGS[model_name]
