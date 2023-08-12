@@ -6,11 +6,11 @@ import numpy as np
 import torch
 from PIL import Image
 from tqdm import tqdm
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
 
-from transforms import GetROI
 
-
-def roi(json_dir, json_data, img):
+def roi(json_data, img, border_size=0, scale_factor=1):
     # get curve, landmark data
     temp_curve = json_data['Models']['PolygonModel2']  # list   [index]['Points']
     curve = []
@@ -18,104 +18,110 @@ def roi(json_dir, json_data, img):
     for temp in temp_curve:
         if len(temp['Points']) > 2:
             curve.append(temp)
-    landmark = json_data['Models']['LandMarkListModel']['Points'][0]['LabelList']
+
     # 将landmark转换为int，同时去除第三个维度
-    landmark = {i['Label']: np.array(i['Position'], dtype=np.int32)[:2] for i in landmark}
-    poly_points = json_data['Polys'][0]['Shapes']
-    # get polygon mask
-    mask_path = os.path.join('./check_masks', json_dir.split('\\')[-1].split('.')[0] + '_mask.jpg')
-    # !!!!!!!!! np会改变Image的通道排列顺序，Image，为cwh，np为hwc，一般为chw（cv等等） cv:hwc
-    mask_img = Image.open(mask_path)  # Image： c, w, h
+    landmarks = np.zeros((6, 2))
+    for i in json_data['Models']['LandMarkListModel']['Points'][0]['LabelList']:
+        landmarks[i['Label']-8] = i['Position'][:2]
 
-    mask_array = np.array(mask_img)  # np 会将shape变为 h, w, c
+    # 获取曲线的点
+    curves = {}
+    for i in json_data['Models']['PolygonModel2']:
+        curves[i['Label']] = np.array(i['Points'])[:, :2]
 
-    # 生成poly_curve 图
-    poly_curve = np.zeros_like(mask_array)
-    for i in range(4):
-        if i == 0 or i == 1:  # 两个区域
-            poly_curve[mask_array == i + 4] = i + 1
-        elif i == 2 or i == 3:  # 两条直线
-            points = curve[i - 3]['Points']
-            label = curve[i - 3]['Label']
-            points_array = np.array(points, dtype=np.int32)[:, :2]
-            for j in range(len(points_array) - 1):
-                cv2.line(poly_curve, points_array[j], points_array[j + 1], color=label - 3, thickness=6)
-    # poly_curve = Image.fromarray(poly_curve)
-    poly_curve = torch.as_tensor(poly_curve)
-    # 得到标注的ROI区域图像
-    img, mask, landmark, curve = GetROI(border_size=30)(img, {'mask': poly_curve, 'landmark': landmark, 'curve': {}})
-    return img
+    # 分割轮廓点
+    polys = {}
+    for i in json_data['Polys'][0]['Shapes']:
+        polys[i['labelType']] = np.array([j['Pos'][:2] for j in i['Points']])
+
+    all_keypoints = np.vstack((landmarks, curves[6], curves[7], polys[4], polys[5]))
+    min_x, min_y = all_keypoints.min(axis=0)
+    max_x, max_y = all_keypoints.max(axis=0)
+
+    box = change_box([min_x, min_y, max_x, max_y], *img.shape, scale_factor, border_size)
+    min_x, min_y, max_x, max_y = box
+
+    roi_img = img[min_y: max_y, min_x: max_x]
+    return roi_img, box
+
+
+def change_box(box, img_h, img_w,  scale, pad_size):
+    min_x, min_y, max_x, max_y = box
+    box_w, box_h = max_x-min_x, max_y-min_y
+    scale_w, scale_h = box_w * (scale - 1) + 2 * pad_size, box_h * (scale - 1) + 2 * pad_size
+    min_x, min_y = max(int(min_x - scale_w / 2 + 0.5), 0), max(int(min_y - scale_h / 2 + 0.5), 0)
+    max_x, max_y = min(int(min_x + scale_w + 0.5 + box_w), img_w), min(int(min_y + scale_h + 0.5 + box_h), img_h)
+    return [min_x, min_y, max_x, max_y]
+
+
+def his(img):
+    # image_root = '../datas/MMPose/1.png'
+    # img = cv2.imread(image_root, 0)
+    # 直方图均衡
+    # equ = cv2.equalizeHist(img)
+    # 限制对比度自适应直方图均衡化(CLAHE)  --> 效果更好
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    cl1 = clahe.apply(img)
+    return cl1
 
 
 def main():
-    img_channels = 1
-    cumulative_mean = np.zeros(img_channels)
-    cumulative_std = np.zeros(img_channels)
-    height = []
-    width = []
-    height_max, height_min = 0, 1000
-    width_max, width_min = 0, 1000
+    means, std, height, width = [], [], [], []
     g_roi = True
+    do_his = False
+    after_roi_his = False
 
     # 从train.txt 中读取信息
-    txt_path = 'train.txt'
-    json_root = './check_jsons'
-    img_root = './image'
+    txt_path = 'all.txt'
+    json_root = '../datas/jsons'
+    img_root = '../datas/images'
     with open(txt_path) as read:
         train_list = [line.strip() for line in read.readlines() if len(line.strip()) > 0]
 
     print(len(train_list))
     for json_path in tqdm(train_list):
-        json_str = open(os.path.join('./check_jsons', json_path), 'r', encoding='utf-8')
+        json_str = open(os.path.join(json_root, json_path), 'r', encoding='utf-8')
         json_data = json.load(json_str)
         json_str.close()
         img_name = json_data['FileInfo']['Name']
         img_path = os.path.join(img_root, img_name)
         img = Image.open(img_path)
-        img = img.convert('L')
+        img = np.array(img.convert('L'))
+        if do_his:
+            img = his(img)
         if g_roi:
-            img = roi(json_path, json_data, img)
-        w, h = img.size
+            img, roi_box = roi(json_data, img, border_size=30, scale_factor=1)
+        if after_roi_his:
+            img = his(img)
+        h, w = img.shape
         height.append(h)
         width.append(w)
-        if w > width_max:
-            width_max = w
-        if h > height_max:
-            height_max = h
-        height_min = height_min if h > height_min else h
-        width_min = width_min if w > width_min else w
 
         img = np.array(img) / 255.
         # gray image
-        cumulative_mean += img.mean()
-        cumulative_std += img.std()
-        # rgb image
-        # img = img.reshape(-1, 3)
-        # cumulative_mean += img.mean(axis=0)
-        # cumulative_std += img.std(axis=0)
+        means.append(img.mean())
+        std.append(img.std())
 
-    # 生成所有的图片名
-    # img_list = []
-    # for name_split in [name.split('_')[:-2] for name in train_list]:
-    #     str = './image/'
-    #     for temp in name_split[:-1]:
-    #         str += temp + '_'
-    #     str += name_split[-1]
-    #     if os.path.exists(str + '.jpg'):
-    #         img_list.append(str + '.jpg')
-    #     elif os.path.exists(str + '.JPG'):
-    #         img_list.append(str + '.JPG')
-    #     else:
-    #         raise '{}.jpg/JPG does not exists'.format(str)
+    means, std = np.array(means), np.array(std)
+    height, width = np.array(height), np.array(width)
+    print(f"mean: {means.mean()}")
+    print(f"std: {std.mean()}")
+    print(f'average height : {height.mean()},    height std : {height.std()}')
+    print(f'average width : {width.mean()},    width std : {width.std()}')
+    print(f'max height : {height.max()}   min height : {height.min()}')
+    print(f'max width : {width.max()}   min width : {width.min()}')
 
-    mean = cumulative_mean / len(train_list)
-    std = cumulative_std / len(train_list)
-    print(f"mean: {mean}")
-    print(f"std: {std}")
-    print(f'average height : {np.mean(height)},    height std : {np.std(height)}')
-    print(f'average width : {np.mean(width)},    width std : {np.std(width)}')
-    print(f'max height : {height_max}   min height : {height_min}')
-    print(f'max width : {width_max}   min width : {width_min}')
+    # 聚类分析
+    w_h = np.hstack((width.reshape(-1, 1), height.reshape(-1, 1)))
+    y_pred = KMeans(n_clusters=2, random_state=1).fit_predict(w_h)
+    plt.scatter(w_h[:, 0], w_h[:, 1], c=y_pred)
+    plt.show()
+
+    m_s = np.hstack((means.reshape(-1, 1), std.reshape(-1, 1)))
+    y_pred = KMeans(n_clusters=2, random_state=1).fit_predict(m_s)
+    plt.scatter(m_s[:, 0], m_s[:, 1], c=y_pred)
+    plt.show()
+
     # mean: [0.22270182 0.22453914 0.22637838]  [0.22922716 0.22991307 0.23040238]    [0.22790766 0.22808619 0.22835823]
     # std: [0.21268971 0.21371627 0.21473691]   [0.21878482 0.21936761 0.21957956]    [0.23118967 0.23132948 0.23143777]
     # average height: 762.9803921568628     739.983651226158     353.67639429312584
@@ -129,4 +135,6 @@ def main():
 
 
 if __name__ == '__main__':
+    # 注意分析不同的图像，有很大的区别（多中心）
+    # 如图片大小（正中与半身），对比度，光照，灰度等（直方图均衡）
     main()
