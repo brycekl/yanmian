@@ -7,6 +7,8 @@ from torch import nn
 import train_utils.distributed_utils as utils
 from .dice_coefficient_loss import dice_loss, build_target
 from train_utils.init_model_utils import warmup_lr_scheduler
+from train_utils.post_process import get_heatmap_maximum
+from transforms import affine_points
 
 
 def criterion(inputs, target, num_classes: int = 2, ignore_index: int = -100, weight=1):
@@ -44,18 +46,6 @@ def evaluate(model, data_loader, device, num_classes, weight=1):
         for image, target in metric_logger.log_every(data_loader, 100, header):
             image, mask = image.to(device), target['mask'].to(device)
             output = model(image)
-            # # 计算dsntnn loss
-            # landmark = target['landmark']
-            # dsnt_landmark = torch.as_tensor([[[l[i][0], l[i][1]] for i in range(8, 14)]for l in landmark])
-            # img_size = image.shape[-2:]
-            # dsnt_landmark = (dsnt_landmark * 2 + 1) / int(img_size[0]) - 1
-            # dsnt_landmark = dsnt_landmark.to(device)
-            # # 生成dsntnn的预测坐标
-            # heatmaps = dsntnn.flat_softmax(output['out'])
-            # coor = dsntnn.dsnt(heatmaps)
-            # euc_losses = dsntnn.euclidean_losses(coor, dsnt_landmark)
-            # reg_losses = dsntnn.js_reg_losses(heatmaps, dsnt_landmark, sigma_t=1.0)
-            # loss += dsntnn.average_loss(euc_losses + reg_losses)
 
             # 计算 loss 和 metric
             # 点定位计算mse loss 和 mse 的metric； 分割计算dice
@@ -64,12 +54,12 @@ def evaluate(model, data_loader, device, num_classes, weight=1):
                 pre = output[:, :6, :][roi_mask]
                 target_ = mask[:, :6, :][roi_mask]
                 loss['mse_loss'] += nn.functional.mse_loss(pre, target_) * weight
-                # 计算mse
-                for i, data in enumerate(output[0, :6, :]):
-                    data = data.to('cpu').detach()
-                    y, x = np.where(data == data.max())
-                    point = target['landmark'][0][i]  # label=i+8
-                    mse[i + 8].append(math.sqrt(math.pow(x[0] - point[0], 2) + math.pow(y[0] - point[1], 2)))
+                # 计算mse # todo 此处使用仿射变换，没有pad，后续更改
+                pre_keypoint = get_heatmap_maximum(output[:, :6, :].cpu().numpy())[0]
+                pre_keypoint = affine_points(pre_keypoint[0], target['reverse_trans'][0])
+                gt_keypoint = target['raw_keypoint'][0]
+                for i, (p_, g_) in enumerate(zip(pre_keypoint, gt_keypoint)):
+                    mse[i + 8].append(math.sqrt(math.pow(p_[0]-g_[0], 2) + math.pow(p_[1]-g_[1], 2)))
             if num_classes == 11 or num_classes == 5:
                 class_index = 0 if num_classes == 5 else 6
                 dice_target = build_target(mask[:, class_index, :], 5, 255)  # B * C* H * W

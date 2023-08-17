@@ -116,10 +116,11 @@ class YanMianDataset(Dataset):
         images, targets = list(zip(*batch))  # batch里每个元素表示一张图片和一个gt
         batched_imgs = cat_list(images, fill_value=0)  # 统一batch的图片大小
         mask = [i['mask'] for i in targets]
-        batched_targets = {'landmark': [i['landmark'] for i in targets]}
-        batched_targets['img_name'] = [i['img_name'] for i in targets]
+        batched_targets = {}
         batched_targets['mask'] = cat_list(mask, fill_value=255)
-        batched_targets['angle_info'] = np.asarray([i['GT_info'] for i in targets])
+        for key in targets[0]:
+            if key != 'mask':
+                batched_targets[key] = [i[key] for i in targets]
         return batched_imgs, batched_targets
 
 
@@ -149,6 +150,7 @@ def towards_right(img=None, landmarks=None):
 
 if __name__ == '__main__':
     from transforms import get_transform
+    datas = {'width': [], 'height': [], 'ratio': []}
     mean = (0.2281, 0.2281, 0.2281)
     std = (0.2313, 0.2313, 0.2313)
     data_type = 'train'
@@ -158,8 +160,13 @@ if __name__ == '__main__':
                             transforms=get_transform(train=data_type_, mean=mean, std=std, hm_var=40))
     for i in range(len(mydata)):
         img, target = mydata[i]
+        width = target['roi_box'][2]-target['roi_box'][0]
+        height = target['roi_box'][3]-target['roi_box'][1]
+        datas['width'].append(width)
+        datas['height'].append(height)
+        datas['ratio'].append(width/height)
         print(i)
-
+    s = 1
 
 # train data 1542
 # val data 330
