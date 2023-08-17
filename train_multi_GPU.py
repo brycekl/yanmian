@@ -36,11 +36,11 @@ def main(args):
     train_dataset = YanMianDataset(
         args.data_path, data_type='train', num_classes=num_classes,
         transforms=get_transform(train=True, mean=mean, std=std, hm_var=var, input_size=args.input_size,
-                                 hm_shrink_rate=args.hm_shrink_rate))
+                                 hms_rate=args.hm_shrink_rate, bs_ratio=args.bs_ratio))
     val_dataset = YanMianDataset(
         args.data_path, data_type='val', num_classes=num_classes,
         transforms=get_transform(train=False, mean=mean, std=std, hm_var=var, input_size=args.input_size,
-                                 hm_shrink_rate=args.hm_shrink_rate))
+                                 hms_rate=args.hm_shrink_rate, bs_ratio=args.bs_ratio))
 
     print("Creating data loaders")
     # 将数据打乱后划分到不同的gpu上
@@ -130,7 +130,7 @@ def main(args):
             if val_mean_mse < metrics['best_mse']['m_mse']:
                 metrics['best_mse']['m_mse'] = val_mean_mse
                 save_model['save_mse'] = True
-                if metrics['best_mse']['m_mse'] < 5:
+                if metrics['best_mse']['m_mse'] < 10:
                     metrics['best_epoch_mse'][epoch] = round(val_mean_mse, 3)
                 for ind, c_mse in val_mse['mse_classes'].items():
                     metrics['best_mse'][ind] = round(c_mse, 3)
@@ -263,17 +263,19 @@ def main(args):
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--run_time', default=datetime.datetime.now().strftime("%Y.%m.%d/%H:%M:%S"))
 
     '''basic parameter'''
-    parser.add_argument('--num_classes', default=11, type=int, help='number of classes')  # 11 / 6 / 4
+    parser.add_argument('--num_classes', default=6, type=int, help='number of classes')  # 11 / 6 / 5
     parser.add_argument('--num_classes2', default=0, type=int, help='number of classes')  # 0 / 5
-    parser.add_argument('--output_dir', default='./models', help='path where to save')
+    parser.add_argument('--output_dir', default='./models/230817', help='path where to save')
     parser.add_argument('--model_name', default='unet', help='the model name')
     parser.add_argument('--hm_shrink_rate', default=1, type=int)  # hrnet最后没有复原为原图大小
     parser.add_argument('-b', '--batch_size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--random_seed', default=0, type=int, help='set random seed')
     parser.add_argument('--hm_var', default=40, type=int, help='heatmap var set')
+    parser.add_argument('--bs_ratio', default=1.2, type=int, help='box scale ratio')
 
     '''model setting'''
     # parser.add_argument('--deep_supervision', default=False, type=str2bool)

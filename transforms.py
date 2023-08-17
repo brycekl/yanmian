@@ -12,8 +12,20 @@ from torchvision.transforms import functional as F
 
 
 class SegmentationPresetTrain:
+    """ Train dataset transforms pipeline
+    Note:
+    Args:
+        base_size: no use
+        hm_var: the var when generate heatmap
+        input_size: The size of the model input
+        heatmap_shrink_rate: shrink rate from input_size to heatmap size
+        bs_ratio: the roi box scale ratio when getting roi box
+        mean:
+        std:
+    Returns:
+    """
     def __init__(self, base_size, hm_var=40, input_size=(256, 256), heatmap_shrink_rate=1,
-                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), bs_ratio=1):
         min_size = int(0.8 * base_size)
         max_size = int(1 * base_size)
 
@@ -22,10 +34,8 @@ class SegmentationPresetTrain:
         # trans = [MyCrop(left_size=1/6,right_size=1/6, bottom_size=1/3)]
         # trans = [RightCrop(2/3)]
         trans = []
-        # if hflip_prob > 0:
-        #     trans.append(RandomHorizontalFlip(hflip_prob))
         trans.extend([
-            GetROI(border_size=30),
+            GetROI(border_size=0, scale_ratio=bs_ratio),
             # RandomResize(min_size, max_size, resize_ratio=1, shrink_ratio=1),
             AffineTransform(rotation=(-20, 30), input_size=input_size, resize_low_high=[0.8, 1],
                             heatmap_shrink_rate=heatmap_shrink_rate),
@@ -34,7 +44,7 @@ class SegmentationPresetTrain:
             CreateGTmask(hm_var=hm_var),
             ToTensor(),
             Normalize(mean=mean, std=std),
-            MyPad(size=256),
+            # MyPad(size=256),
         ])
 
         self.transforms = Compose(trans)
@@ -45,15 +55,15 @@ class SegmentationPresetTrain:
 
 class SegmentationPresetEval:
     def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40, input_size=(256, 256),
-                 heatmap_shrink_rate=1):
+                 heatmap_shrink_rate=1, bs_ratio=1):
         self.transforms = Compose([
-            GetROI(border_size=30),
+            GetROI(border_size=0, scale_ratio=bs_ratio),
             AffineTransform(input_size=input_size, heatmap_shrink_rate=heatmap_shrink_rate),
             # RandomResize(256, 256, shrink_ratio=0),
             CreateGTmask(hm_var=hm_var),
             ToTensor(),
             Normalize(mean=mean, std=std),
-            MyPad(size=256),
+            # MyPad(size=256),
         ])
 
     def __call__(self, img, target):
@@ -61,15 +71,15 @@ class SegmentationPresetEval:
 
 
 def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40, input_size=(256, 256),
-                  hm_shrink_rate=1):
+                  hms_rate=1, bs_ratio=1):
     base_size = 256
 
     if train:
         return SegmentationPresetTrain(base_size, mean=mean, std=std, hm_var=hm_var, input_size=input_size,
-                                       heatmap_shrink_rate=hm_shrink_rate)
+                                       heatmap_shrink_rate=hms_rate, bs_ratio=bs_ratio)
     else:
         return SegmentationPresetEval(mean=mean, std=std, hm_var=hm_var, input_size=input_size,
-                                      heatmap_shrink_rate=hm_shrink_rate)
+                                      heatmap_shrink_rate=hms_rate, bs_ratio=bs_ratio)
 
 
 def pad_if_smaller(img, size, fill=0):
@@ -283,10 +293,12 @@ class MyCrop(object):  # 左右裁剪1/6 ,下裁剪1/3
 
 
 class GetROI(object):
-    def __init__(self, border_size=10):
+    def __init__(self, border_size=10, scale_ratio=1):
         self.border_size = border_size
+        self.scale_ratio = scale_ratio
 
     def __call__(self, img, target):
+        target['raw_keypoint'] = target['landmark']
         img_w, img_h = img.size
         mask = target['mask']
         landmark = target['landmark']
@@ -305,19 +317,29 @@ class GetROI(object):
             bottom = bottom if bottom < img_h else img_h
             height = bottom - top
             width = right - left
-            target['roi_box'] = [left, top, right, bottom]
+            target['roi_box'] = self.scale_box([left, top, right, bottom], img_h, img_w, self.scale_ratio)
         # 测试集，使用detec module预测得到的roi box
         else:
+            target['roi_box'] = self.scale_box(target['roi_box'], img_h, img_w, self.scale_ratio)
             box = target['roi_box']
             left, top, right, bottom = box
             assert left >= 0 and top >= 0 and right <= img_w and bottom <= img_h
             height, width = bottom - top, right - left
 
-        img = F.crop(img, top, left, height, width)
-        target['mask'] = F.crop(mask, top, left, height, width)
-        target['landmark'] = np.asarray([[i[0] - left, i[1] - top] for i in landmark])
-        target['curve'] = {i: np.asarray([[j[0] - left, j[1] - top] for j in target['curve'][i]]) for i in target['curve']}
+        # img = F.crop(img, top, left, height, width)
+        # target['mask'] = F.crop(mask, top, left, height, width)
+        # target['landmark'] = np.asarray([[i[0] - left, i[1] - top] for i in landmark])
+        # target['curve'] = {i: np.asarray([[j[0] - left, j[1] - top] for j in target['curve'][i]]) for i in target['curve']}
         return img, target
+
+    def scale_box(self, ann_box, img_h, img_w, scale):
+        # 将box的范围根据scale放大或者缩小
+        min_x, min_y, max_x, max_y = ann_box
+        w, h = max_x-min_x, max_y-min_y
+        scale_w, scale_h = w * (scale - 1), h * (scale - 1)
+        min_x, min_y = max(int(min_x - scale_w / 2 + 0.5), 0), max(int(min_y - scale_h / 2 + 0.5), 0)
+        max_x, max_y = min(int(min_x + scale_w + 0.5 + w), img_w), min(int(min_y + scale_h + 0.5 + h), img_h)
+        return [min_x, min_y, max_x, max_y]
 
 
 class MyPad(object):
@@ -446,8 +468,8 @@ class AffineTransform(object):
     # 然后使用cv2.warpAffine()进行仿射变换
     def __init__(self,
                  scale: Tuple[float, float] = None,  # e.g. (0.65, 1.35) 将图片放大或缩小的比例
-                 rotation: Tuple[int, int] = None,   # e.g. (-45, 45)  将图片选择的角度
-                 input_size: Tuple[int, int] = (192, 256),  # 输入网络的图片大小
+                 rotation: Tuple[int, int] = None,   # e.g. (-45, 45)  将图片旋转的角度
+                 input_size: Tuple[int, int] = (256, 256),  # 输入网络的图片大小  -> h, w
                  resize_low_high=(1, 1),  # 对输入网络的大小resize，其他部分填充
                  heatmap_shrink_rate: int = 1):  # heatmap缩小尺寸，如hrnet会将预测的heatmap缩小
         self.scale = scale
@@ -457,20 +479,24 @@ class AffineTransform(object):
         self.resize_low_high = resize_low_high
 
     def __call__(self, img, target):
+        # 计算仿射变换后，roi box的位置（保持长宽比），将长边缩放到 input_size * resize_ratio
         resize_ratio = np.random.uniform(*self.resize_low_high)
-        src_xmax, src_xmin, src_ymax, src_ymin = img.size[0], 0, img.size[1], 0
-        self.input_size = [int(src_ymax/src_xmax*(256*resize_ratio)), int(256*resize_ratio)] if src_xmax > src_ymax \
-            else [int(256*resize_ratio), int(src_xmax/src_ymax*(256*resize_ratio))]
+        src_xmin, src_ymin, src_xmax, src_ymax = target['roi_box']
+        src_w, src_h = src_xmax-src_xmin, src_ymax-src_ymin
+        # 将长边缩小到256*resize_ratio, 保持原来的长宽比, 所以短边还需要pad
+        # roi_box 为仿射变换后roi的h, w， 后续通过get_roi_location 获取最终roi 位置
+        roi_box = [int(src_h/src_w*(256*resize_ratio)), int(256*resize_ratio)] if src_w > src_h \
+            else [int(256*resize_ratio), int(src_w/src_h*(256*resize_ratio))]
 
         src_w = src_xmax - src_xmin
         src_h = src_ymax - src_ymin
+        # 仿射变换的坐标位置使用w， h
         src_center = np.array([(src_xmin + src_xmax) / 2, (src_ymin + src_ymax) / 2])
         src_p2 = src_center + np.array([0, -src_h / 2])  # top middle
         src_p3 = src_center + np.array([src_w / 2, 0])   # right middle
 
-        dst_center = np.array([(self.input_size[1] - 1) / 2, (self.input_size[0] - 1) / 2])
-        dst_p2 = np.array([(self.input_size[1] - 1) / 2, 0])  # top middle
-        dst_p3 = np.array([self.input_size[1] - 1, (self.input_size[0] - 1) / 2])  # right middle
+        # 生成仿射变换后roi box的位置
+        dst_center, dst_p2, dst_p3 = self.get_box_location(self.input_size, roi_box, target['data_type'])
 
         if self.scale is not None:
             # scale < 1, 图像放大，区域内显示的图形内容变少， scale > 1，图像缩小，区域内显示的图像内容变多（填充黑边）
@@ -514,6 +540,27 @@ class AffineTransform(object):
         target["trans"] = trans
         target["reverse_trans"] = reverse_trans
         return resize_img, target
+
+    def get_box_location(self, input_size, roi_box, data_type):
+        roi_h, roi_w = roi_box
+        # 输入的roi 为hw，仿射变换坐标为wh
+        dst_center = np.array([(roi_box[1] - 1) / 2, (roi_box[0] - 1) / 2])
+        h_pad, w_pad = input_size[0] - roi_h, input_size[1] - roi_w
+
+        # 将roi center位置向右下进行平移，使其能在256x256的中间位置
+        if data_type == 'train':  # train 可以用各种填充方式
+            if np.random.random() < 0.7:
+                w_pad_l = np.random.randint(0, w_pad + 1) if w_pad >= 0 else np.random.randint(w_pad, 1)
+                h_pad_l = np.random.randint(0, h_pad + 1) if h_pad >= 0 else np.random.randint(h_pad, 1)
+            else:
+                w_pad_l, h_pad_l = int(w_pad / 2), int(h_pad / 2)
+        else:
+            w_pad_l, h_pad_l = w_pad // 2, h_pad // 2
+
+        dst_center = dst_center + np.array([w_pad_l, h_pad_l])
+        dst_p2 = dst_center + np.array([0, -roi_h / 2])  # top middle
+        dst_p3 = dst_center + np.array([roi_w / 2, 0])   # right middle
+        return dst_center, dst_p2, dst_p3
 
 
 class CreateGTmask(object):
