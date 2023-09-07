@@ -37,8 +37,7 @@ class SegmentationPresetTrain:
         trans.extend([
             GetROI(border_size=0, scale_ratio=bs_ratio),
             # RandomResize(min_size, max_size, resize_ratio=1, shrink_ratio=1),
-            AffineTransform(rotation=(-20, 30), input_size=input_size, resize_low_high=[0.8, 1],
-                            heatmap_shrink_rate=heatmap_shrink_rate),
+            AffineTransform(input_size=input_size, heatmap_shrink_rate=heatmap_shrink_rate),
             RandomHorizontalFlip(0.5),
             RandomVerticalFlip(0.5),
             CreateGTmask(hm_var=hm_var),
@@ -299,6 +298,7 @@ class GetROI(object):
 
     def __call__(self, img, target):
         target['raw_keypoint'] = target['landmark']
+        # target['raw_mask'] = target['mask']
         img_w, img_h = img.size
         mask = target['mask']
         landmark = target['landmark']

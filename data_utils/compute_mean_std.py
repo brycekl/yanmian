@@ -10,7 +10,7 @@ from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 
 
-def roi(json_data, img, border_size=0, scale_factor=1):
+def roi(json_data, img, border_size=0, scale_factor: float = 1.):
     # get curve, landmark data
     temp_curve = json_data['Models']['PolygonModel2']  # list   [index]['Points']
     curve = []
@@ -70,6 +70,7 @@ def main():
     g_roi = True
     do_his = False
     after_roi_his = False
+    border_size, scale_factor = 0, 1.2
 
     # 从train.txt 中读取信息
     txt_path = 'all.txt'
@@ -78,7 +79,7 @@ def main():
     with open(txt_path) as read:
         train_list = [line.strip() for line in read.readlines() if len(line.strip()) > 0]
 
-    print(len(train_list))
+    print('数据量: {}     border size: {}    scale factor: {}'.format(len(train_list), border_size, scale_factor))
     for json_path in tqdm(train_list):
         json_str = open(os.path.join(json_root, json_path), 'r', encoding='utf-8')
         json_data = json.load(json_str)
@@ -90,7 +91,7 @@ def main():
         if do_his:
             img = his(img)
         if g_roi:
-            img, roi_box = roi(json_data, img, border_size=30, scale_factor=1)
+            img, roi_box = roi(json_data, img, border_size=border_size, scale_factor=scale_factor)
         if after_roi_his:
             img = his(img)
         h, w = img.shape

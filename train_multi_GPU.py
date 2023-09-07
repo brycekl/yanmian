@@ -22,8 +22,8 @@ def main(args):
     assert num_classes1 in [5, 6, 11] and num_classes2 in [0, 5]
     num_classes = num_classes1 + num_classes2
 
-    mean = (0.2281, 0.2281, 0.2281)
-    std = (0.2313, 0.2313, 0.2313)
+    mean = (0.229, 0.229, 0.229)
+    std = (0.231, 0.231, 0.231)
 
     model_name = args.model_name
     output_dir = args.output_dir
@@ -234,7 +234,7 @@ def main(args):
         print(metrics['best_epoch_mse'], metrics['best_epoch_dice'])
 
         # 最后的作图 loss， metric图，以及文件夹重命名
-        skip_epoch = 1  # 前面训练不稳定，作图跳过的epoch数
+        skip_epoch = 5  # 前面训练不稳定，作图跳过的epoch数
         assert skip_epoch >= 0 and skip_epoch <= args.epochs
         if num_classes == 6 or num_classes == 11:
             plt.plot(losses['train_losses']['mse_loss'][skip_epoch:], 'r', label='train_mse_loss')
@@ -275,7 +275,7 @@ def parse_args():
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--random_seed', default=0, type=int, help='set random seed')
     parser.add_argument('--hm_var', default=40, type=int, help='heatmap var set')
-    parser.add_argument('--bs_ratio', default=1.2, type=int, help='box scale ratio')
+    parser.add_argument('--bs_ratio', default=1.1, type=float, help='box scale ratio')
 
     '''model setting'''
     # parser.add_argument('--deep_supervision', default=False, type=str2bool)

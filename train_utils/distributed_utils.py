@@ -312,10 +312,10 @@ def init_distributed_mode(args):
     """
     os.environ: 环境变量，键值对保存环境信息
     初始化分布式训练，DistributedDataParallel
-    RANK:
-    WORLD_SIZE:
-    LOCAL_RANK:
-
+    RANK: 表示进程序号，用于进程间通信，表征进程优先级。rank=0的主机为master节点
+    WORLD_SIZE: 全局进程个数
+    LOCAL_RANK: 进程内，GPU 编号，非显式参数，由 torch.distributed.launch 内部指定。
+                比方说， rank = 3，local_rank = 0 表示第 3 个进程内的第 1 块 GPU
     """
     if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
         args.rank = int(os.environ["RANK"])
