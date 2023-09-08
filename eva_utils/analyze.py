@@ -75,6 +75,7 @@ def metric_icc(result_pre, result_gt, metric, icc_type="icc(3)"):
 
 def metric_BA(result_pre, result_gt, metric, save_path=None):
     # plt.rc('font', family='Times New Roman')
+    font_title = {'family': 'Times New Roman', 'weight': 'normal', 'size': 20}
     font1 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 16}
     font2 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 10}
     assert metric in ['IFA', 'MNM', 'FMA', 'PL', 'FPL', 'MML', 'FS']
@@ -85,6 +86,13 @@ def metric_BA(result_pre, result_gt, metric, save_path=None):
     error_x = (gt_data + pre_data) / 2
     error_mean = np.mean(error)
     error_std = np.std(error)
+    p_mean, p_std = pre_data.mean(), pre_data.std()
+    g_mean, g_std = gt_data.mean(), gt_data.std()
+    print(metric)
+    print(p_mean, p_std, p_mean-1.96*p_std, p_mean+1.96*p_std)
+    print(g_mean, g_std, g_mean-1.96*g_std, g_mean+1.96*g_std)
+    print(error_mean, error_std, error_mean-1.96*error_std, error_mean+1.96*error_std)
+
     # le为各指标偏移值，（上下偏移和左右偏移）
     # mean+SD 左右，mean-SD 左右，上下，1.96SD左右，-1.96SD左右，上下
     le = {'IFA': [7.8, 7.3, 1, 1.1, 1.7, 2.1], 'MNM': [1.9, 1.8, 0.25, -0.13, 0.25, 0.6], 'FMA': [6.65, 6.3, 1.1, 1.1, 1.5, 2],
@@ -107,9 +115,9 @@ def metric_BA(result_pre, result_gt, metric, save_path=None):
         if e > error_mean + 1.96 * error_std or e < error_mean - 1.96 * error_std:
             num_95 += 1
     # print(metric, 'mean:{},  std:{},  有{}个值位于95置信区间外'.format(error_mean, error_std, num_95))
-    # plt.title(metric)
-    plt.xlabel("Mean of {} between two groups".format(show_metrics[metric]), fontdict=font1)
-    plt.ylabel("Difference of {} between two groups".format(show_metrics[metric]), fontdict=font1)
+    plt.title(metric, fontdict=font_title)
+    plt.xlabel("Mean of AI and Manual", fontdict=font1)
+    plt.ylabel("(Manual - AI) / Mean %", fontdict=font1)
     plt.xticks(fontproperties='Times New Roman', size=14)
     plt.yticks(fontproperties='Times New Roman', size=14)
 
