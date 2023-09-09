@@ -233,9 +233,9 @@ def show_predict(rgb_img, prediction, classes):
 
 
 def show_one_metric(rgb_img, pre, metric: str, not_exist_landmark, gt=None, box=None, show_img: bool = False, spa=1,
-                    resize_ratio=1, save_path=None):
+                    resize_ratio=1, save_root=None):
     assert metric in ['IFA', 'MNM', 'FMA', 'PL', 'FS', 'MML'], "metric must in ['IFA', 'MNM', 'FMA', 'PL', 'FS', 'MML']"
-    img_name = os.path.basename(save_path)
+    img_name = os.path.basename(save_root)
     landmark_pre = pre['landmark']
     mask_pre = pre['mask']
     upper_lip_pre = landmark_pre[8]
@@ -332,7 +332,9 @@ def show_one_metric(rgb_img, pre, metric: str, not_exist_landmark, gt=None, box=
             '0110091_Meixia_Zhang_20170901100649778': [263, 82, 499, 318],
             '0119637_Yan_Cai_20220307083302440': [104, 80, 330, 306],
             '2411097_HE_HONGZHU': [223, 34, 459, 270],
-            '2010530_zhang_wei': [305, 29, 537, 261]}
+            '2010530_zhang_wei': [305, 29, 537, 261],
+            '0142529_XIA_YI_20190326144754892': [100, 18, 331, 249],
+            '0131720_Xinyi_Lv_20181025111452356': [289, 19, 530, 260]}
     box = box_[img_name] if img_name in box_ else box
     if box:
         img = img.crop(box)
@@ -340,6 +342,7 @@ def show_one_metric(rgb_img, pre, metric: str, not_exist_landmark, gt=None, box=
         plt.imshow(img)
         plt.title(metric)
         plt.show()
+    save_path = os.path.join(save_root, metric + '.png')
     if save_path:
         if not os.path.exists(os.path.dirname(save_path)):
             os.makedirs(os.path.dirname(save_path))
