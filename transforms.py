@@ -24,7 +24,7 @@ class SegmentationPresetTrain:
         std:
     Returns:
     """
-    def __init__(self, base_size, hm_var=40, input_size=(256, 256), heatmap_shrink_rate=1,
+    def __init__(self, base_size, hm_var=40, input_size=(256, 256), heatmap_shrink_rate=1, hm_max=8,
                  mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), bs_ratio=1):
         min_size = int(0.8 * base_size)
         max_size = int(1 * base_size)
@@ -40,7 +40,7 @@ class SegmentationPresetTrain:
             AffineTransform(input_size=input_size, heatmap_shrink_rate=heatmap_shrink_rate),
             RandomHorizontalFlip(0.5),
             RandomVerticalFlip(0.5),
-            CreateGTmask(hm_var=hm_var),
+            CreateGTmask(hm_var=hm_var, hm_max=hm_max),
             ToTensor(),
             Normalize(mean=mean, std=std),
             # MyPad(size=256),
@@ -53,13 +53,13 @@ class SegmentationPresetTrain:
 
 
 class SegmentationPresetEval:
-    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40, input_size=(256, 256),
+    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40, input_size=(256, 256), hm_max=8,
                  heatmap_shrink_rate=1, bs_ratio=1):
         self.transforms = Compose([
             GetROI(border_size=0, scale_ratio=bs_ratio),
             AffineTransform(input_size=input_size, heatmap_shrink_rate=heatmap_shrink_rate),
             # RandomResize(256, 256, shrink_ratio=0),
-            CreateGTmask(hm_var=hm_var),
+            CreateGTmask(hm_var=hm_var, hm_max=hm_max),
             ToTensor(),
             Normalize(mean=mean, std=std),
             # MyPad(size=256),
@@ -69,15 +69,15 @@ class SegmentationPresetEval:
         return self.transforms(img, target)
 
 
-def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40, input_size=(256, 256),
+def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), hm_var=40, hm_max=8, input_size=(256, 256),
                   hms_rate=1, bs_ratio=1):
     base_size = 256
 
     if train:
-        return SegmentationPresetTrain(base_size, mean=mean, std=std, hm_var=hm_var, input_size=input_size,
+        return SegmentationPresetTrain(base_size, mean=mean, std=std, hm_var=hm_var, hm_max=hm_max, input_size=input_size,
                                        heatmap_shrink_rate=hms_rate, bs_ratio=bs_ratio)
     else:
-        return SegmentationPresetEval(mean=mean, std=std, hm_var=hm_var, input_size=input_size,
+        return SegmentationPresetEval(mean=mean, std=std, hm_var=hm_var, hm_max=hm_max, input_size=input_size,
                                       heatmap_shrink_rate=hms_rate, bs_ratio=bs_ratio)
 
 

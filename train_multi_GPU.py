@@ -33,13 +33,14 @@ def main(args):
     model_txt = output_dir + '/' + 'model.txt'
 
     var = args.hm_var
+    hm_max = args.hm_max
     train_dataset = YanMianDataset(
         args.data_path, data_type='train', num_classes=num_classes,
-        transforms=get_transform(train=True, mean=mean, std=std, hm_var=var, input_size=args.input_size,
+        transforms=get_transform(train=True, mean=mean, std=std, hm_var=var, hm_max=hm_max, input_size=args.input_size,
                                  hms_rate=args.hm_shrink_rate, bs_ratio=args.bs_ratio))
     val_dataset = YanMianDataset(
         args.data_path, data_type='val', num_classes=num_classes,
-        transforms=get_transform(train=False, mean=mean, std=std, hm_var=var, input_size=args.input_size,
+        transforms=get_transform(train=False, mean=mean, std=std, hm_var=var, hm_max=hm_max, input_size=args.input_size,
                                  hms_rate=args.hm_shrink_rate, bs_ratio=args.bs_ratio))
 
     print("Creating data loaders")
@@ -275,6 +276,7 @@ def parse_args():
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--random_seed', default=0, type=int, help='set random seed')
     parser.add_argument('--hm_var', default=40, type=int, help='heatmap var set')
+    parser.add_argument('--hm_max', default=8, type=int, help='heatmap max')
     parser.add_argument('--bs_ratio', default=1.1, type=float, help='box scale ratio')
 
     '''model setting'''
