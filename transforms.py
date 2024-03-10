@@ -9,6 +9,56 @@ from torchvision import transforms as T
 from torchvision.transforms import functional as F
 
 
+class SegmentationPresetTrain:
+    def __init__(self, base_size, crop_size, hflip_prob=0.5, vflip_prob=0.5,
+                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+        min_size = int(0.8 * base_size)
+        max_size = int(1 * base_size)
+
+        # 这些transforms都是自己写的  T.RandomResize(min_size, max_size)
+        # 将图片左边和右边裁去1/6，下方裁去1/3
+        # trans = [T.MyCrop(left_size=1/6,right_size=1/6, bottom_size=1/3)]
+        # trans = [T.RightCrop(2/3)]
+        trans = []
+        # if hflip_prob > 0:
+        #     trans.append(T.RandomHorizontalFlip(hflip_prob))
+        trans.extend([
+            RandomResize(min_size, max_size, resize_ratio=1, shrink_ratio=1),
+            RandomHorizontalFlip(0.5),
+            RandomVerticalFlip(0.5),
+            # T.RandomRotation(10, rotate_ratio=0.7, expand_ratio=0.7),
+            ToTensor(),
+            Normalize(mean=mean, std=std),
+        ])
+
+        self.transforms = Compose(trans)
+
+    def __call__(self, img, target):
+        return self.transforms(img, target)
+
+
+class SegmentationPresetEval:
+    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+        self.transforms = Compose([
+            Resize([256]),
+            ToTensor(),
+            Normalize(mean=mean, std=std),
+        ])
+
+    def __call__(self, img, target):
+        return self.transforms(img, target)
+
+
+def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+    base_size = 256
+    crop_size = 480
+
+    if train:
+        return SegmentationPresetTrain(base_size, crop_size, mean=mean, std=std)
+    else:
+        return SegmentationPresetEval(mean=mean, std=std)
+
+
 def pad_if_smaller(img, size, fill=0):
     # 如果图像最小边长小于给定size，则用数值fill进行padding
     if isinstance(img, torch.Tensor):

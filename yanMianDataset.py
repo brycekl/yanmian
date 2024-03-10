@@ -9,7 +9,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 from data_utils.init_data import check_data
-from transforms import GetROI, MyPad
+from transforms import GetROI, MyPad, get_transform
 from torchvision.transforms.functional import resize
 
 
@@ -100,7 +100,7 @@ class YanMianDataset(Dataset):
         self.towards_right = towards_right(origin_image, landmark)
         poly_points = json_data['Polys'][0]['Shapes']
         # get polygon mask
-        mask_path = os.path.join(self.mask_path, json_dir.split(self.run_env)[-1].split('.')[0] + '_mask_255.jpg')
+        mask_path = os.path.join(self.mask_path, os.path.basename(json_dir).split('.')[0] + '_mask_255.jpg')
         # !!!!!!!!! np会改变Image的通道排列顺序，Image，为cwh，np为hwc，一般为chw（cv等等） cv:hwc
         mask_img = Image.open(mask_path)  # Image： c, w, h
         mask_array = np.array(mask_img)  # np 会将shape变为 h, w, c
@@ -225,14 +225,18 @@ def towards_right(img, landmarks):
         return True
     return False
 
-# from transforms import RightCrop
-# d = os.getcwd()
-# mydata = YanMianDataset(d, data_type='test', resize=[320,320])  # , transforms=RightCrop(2/3),resize=[256,384]
-# # a,b = mydata[0]
-# # c =1
-# for i in range(len(mydata)):
-#     a,b = mydata[i]
-#     print(i)
+
+if __name__ == '__main__':
+    from transforms import RightCrop
+    mean = (0.2281, 0.2281, 0.2281)
+    std = (0.2313, 0.2313, 0.2313)
+    mydata = YanMianDataset('../datas/yanmian', data_type='train', num_classes=6,
+                            transforms=get_transform(train=True, mean=mean, std=std), resize=(256, 256))
+    # a,b = mydata[0]
+    # c =1
+    for i in range(len(mydata)):
+        a,b = mydata[i]
+        print(i)
 
 
 # train data 1542

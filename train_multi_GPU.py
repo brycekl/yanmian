@@ -7,61 +7,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-import transforms as T
 from src import UNet, u2net, MobileV3Unet, VGG16UNet, resnet_unet
 from torch.utils.tensorboard import SummaryWriter
 from train_utils import train_one_epoch, evaluate, create_lr_scheduler, init_distributed_mode, save_on_master, mkdir
 from yanMianDataset import YanMianDataset
-
-
-class SegmentationPresetTrain:
-    def __init__(self, base_size, crop_size, hflip_prob=0.5, vflip_prob=0.5,
-                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
-        min_size = int(0.8 * base_size)
-        max_size = int(1 * base_size)
-
-        # 这些transforms都是自己写的  T.RandomResize(min_size, max_size)
-        # 将图片左边和右边裁去1/6，下方裁去1/3
-        # trans = [T.MyCrop(left_size=1/6,right_size=1/6, bottom_size=1/3)]
-        # trans = [T.RightCrop(2/3)]
-        trans = []
-        # if hflip_prob > 0:
-        #     trans.append(T.RandomHorizontalFlip(hflip_prob))
-        trans.extend([
-            T.RandomResize(min_size, max_size, resize_ratio=1, shrink_ratio=1),
-            T.RandomHorizontalFlip(0.5),
-            T.RandomVerticalFlip(0.5),
-            # T.RandomRotation(10, rotate_ratio=0.7, expand_ratio=0.7),
-            T.ToTensor(),
-            T.Normalize(mean=mean, std=std),
-        ])
-
-        self.transforms = T.Compose(trans)
-
-    def __call__(self, img, target):
-        return self.transforms(img, target)
-
-
-class SegmentationPresetEval:
-    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
-        self.transforms = T.Compose([
-            T.Resize([256]),
-            T.ToTensor(),
-            T.Normalize(mean=mean, std=std),
-        ])
-
-    def __call__(self, img, target):
-        return self.transforms(img, target)
-
-
-def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
-    base_size = 256
-    crop_size = 480
-
-    if train:
-        return SegmentationPresetTrain(base_size, crop_size, mean=mean, std=std)
-    else:
-        return SegmentationPresetEval(mean=mean, std=std)
+from transforms import get_transform
 
 
 def create_model(num_classes, num_classes_2=0, in_channel=3, base_c=32, model='unet'):
@@ -388,7 +338,7 @@ if __name__ == "__main__":
     # 训练过程打印信息的频率
     parser.add_argument('--print-freq', default=1, type=int, help='print frequency')
     # 文件保存地址
-    parser.add_argument('--output_dir', default='./model/model_test/c10/backbone_test3/tempmodel_c3_bc32_2x16_50e',
+    parser.add_argument('--output_dir', default='./models/biye/origin_result/',
                         help='path where to save')
     # 基于上次的训练结果接着训练
     parser.add_argument('--resume', default='', help='resume from checkpoint')
