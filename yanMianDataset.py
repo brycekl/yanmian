@@ -31,7 +31,7 @@ class YanMianDataset(Dataset):
         if json_path is None:
             json_path = os.path.join(self.root, 'jsons')
         if txt_path is None:
-            txt_path = os.path.join(self.root.replace('data', 'data_utils'), data_type + '.txt')
+            txt_path = os.path.join(self.root.replace('datas', 'data_utils'), data_type + '.txt')
         if mask_path is not None:
             self.mask_path = mask_path
         else:
@@ -121,7 +121,7 @@ class YanMianDataset(Dataset):
                 cv2.line(poly_curve, points_array[j], points_array[j + 1], color=label - 3, thickness=2)
         poly_curve = torch.as_tensor(poly_curve)
         # 得到标注的ROI区域图像-->单纯裁剪
-        roi_box = roi_boxes[json_dir] if self.data_type == 'test' else None
+        roi_box = roi_boxes[os.path.basename(json_dir)] if self.data_type == 'test' else None
         raw_roi_img, poly_curve, landmark, curve, roi_box = GetROI(border_size=30)(
             origin_image, {'mask': poly_curve, 'landmark': landmark, 'curve': curve, 'roi_box': roi_box})
 

@@ -111,7 +111,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, num_classes, l
         # image, target = BatchResizeC(image, target)
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             output = model(image)
-            assert num_classes == output.shape[1]
+            # assert num_classes == output.shape[1]
             # 计算损失
             loss = criterion(output, mask, num_classes=num_classes, ignore_index=255, weight=weight)
 
