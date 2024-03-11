@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from src import UNet, u2net, MobileV3Unet, VGG16UNet, resnet_unet
+from src import UNet, u2net, MobileV3Unet, VGG16UNet, resnet_unet, U_ConvNext
 from torch.utils.tensorboard import SummaryWriter
 from train_utils import train_one_epoch, evaluate, create_lr_scheduler, init_distributed_mode, save_on_master, mkdir
 from yanMianDataset import YanMianDataset
@@ -18,6 +18,9 @@ def create_model(num_classes, num_classes_2=0, in_channel=3, base_c=32, model='u
     if model == 'unet':
         model = UNet(in_channels=in_channel, num_classes=num_classes, num_classes_2=num_classes_2, base_c=base_c)
         print('create unet model successfully')
+    elif model == 'convnext_unet':
+        model = U_ConvNext(img_ch=in_channel, output_ch=num_classes, channels=base_c)
+        print('create convnext unet model successfully.')
     elif model == 'mobilev3unet':
         model = MobileV3Unet(num_classes=num_classes)
         print('create mobilev3unet model successfully')
@@ -92,7 +95,7 @@ def main(args):
     # create model num_classes equal background + foreground classes
     output_channel = 6 if num_classes in [6, 10] else 5
     output_channel2 = 5 if num_classes == 10 else 0
-    model = create_model(num_classes=output_channel, num_classes_2=output_channel2, model=args.model_name)
+    model = create_model(num_classes=output_channel, num_classes_2=output_channel2, model=args.model_name, base_c=args.base_c)
     model.to(device)
 
     if args.sync_bn:
@@ -312,6 +315,7 @@ if __name__ == "__main__":
     parser.add_argument('-b', '--batch_size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--model_name', default='unet', type=str)
+    parser.add_argument('--base_c', default=32, type=int)
     # 指定接着从哪个epoch数开始训练
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
     # 训练的总epoch数
@@ -361,7 +365,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 如果指定了保存文件地址，检查文件夹是否存在，若不存在，则创建
-    args.output_dir = os.path.join(args.output_dir, 'unet_' + str(args.lr))
+    args.output_dir = os.path.join(args.output_dir, f'convnext_unet_{str(args.base_c)}' + str(args.lr))
     if args.output_dir:
         mkdir(args.output_dir)
 
