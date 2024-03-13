@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from src import UNet, u2net, MobileV3Unet, VGG16UNet, resnet_unet, U_ConvNext
+from src import UNet, u2net, MobileV3Unet, VGG16UNet, resnet_unet, U_ConvNext, ResenetUnet
 from torch.utils.tensorboard import SummaryWriter
 from train_utils import train_one_epoch, evaluate, create_lr_scheduler, init_distributed_mode, save_on_master, mkdir
 from yanMianDataset import YanMianDataset
@@ -18,6 +18,10 @@ def create_model(num_classes, num_classes_2=0, in_channel=3, base_c=32, model='u
     if model == 'unet':
         model = UNet(in_channels=in_channel, num_classes=num_classes, num_classes_2=num_classes_2, base_c=base_c)
         print('create unet model successfully')
+    elif model in ['resnet50', 'resnet101']:
+        layer_num = int(model.split('resnet')[-1])
+        model = ResenetUnet(num_classes=num_classes, layer_num=layer_num)
+        print(f'create resnet unet {layer_num} model successfully')
     elif model == 'convnext_unet':
         model = U_ConvNext(img_ch=in_channel, output_ch=num_classes, channels=base_c)
         print('create convnext unet model successfully.')
@@ -93,9 +97,9 @@ def main(args):
     print(len(train_dataset), len(val_dataset))
     print("Creating model")
     # create model num_classes equal background + foreground classes
-    output_channel = 6 if num_classes in [6, 10] else 5
-    output_channel2 = 5 if num_classes == 10 else 0
-    model = create_model(num_classes=output_channel, num_classes_2=output_channel2, model=args.model_name, base_c=args.base_c)
+    # output_channel = 6 if num_classes in [6, 10] else 5
+    # output_channel2 = 5 if num_classes == 10 else 0
+    model = create_model(num_classes=11, num_classes_2=0, model=args.model_name, base_c=args.base_c)
     model.to(device)
 
     if args.sync_bn:
@@ -365,7 +369,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 如果指定了保存文件地址，检查文件夹是否存在，若不存在，则创建
-    args.output_dir = os.path.join(args.output_dir, f'convnext_unet_{str(args.base_c)}' + str(args.lr))
+    args.output_dir = os.path.join(args.output_dir, f'{args.model_name}_{str(args.lr)}')
     if args.output_dir:
         mkdir(args.output_dir)
 
