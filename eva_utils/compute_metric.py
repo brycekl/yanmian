@@ -110,7 +110,7 @@ def get_biggest_distance(mask, mask_label, line, h_img):
         # 计算误差
         if -1< h_img-y - (x*k+b) < 1:
             head_points.append([x,y])
-    head_point = np.mean(head_points, axis=0, dtype=np.int)
+    head_point = np.mean(head_points, axis=0, dtype=int)
     return big_distance, head_point, big_keypoint
 
 

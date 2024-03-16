@@ -3,7 +3,7 @@ import shutil
 import time
 import pandas as pd
 from yanMianDataset import YanMianDataset
-import transforms as T
+from transforms import get_transform
 from eva_utils.my_eval import *
 from eva_utils import analyze
 import matplotlib.pyplot as plt
@@ -12,11 +12,22 @@ from src import VGG16UNet
 from train_utils.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
 from train_utils.vit_seg_modeling import VisionTransformer as ViT_seg
 from train_utils.dice_coefficient_loss import build_target, multiclass_dice_coeff
+import yaml
+from train_multi_GPU import create_model
 
 
 def time_synchronized():
     torch.cuda.synchronize() if torch.cuda.is_available() else None
     return time.time()
+
+
+def get_default_device():
+    if torch.cuda.is_available():
+        return 'cuda'
+    elif getattr(torch.backends,"mps", None) is not None and torch.backends.mps.is_available():
+        return 'mps'
+    else:
+        return 'cpu'
 
 
 def show_img(img, pre_target, target, title='', save_path=None):
@@ -54,9 +65,11 @@ def show_img(img, pre_target, target, title='', save_path=None):
 def main():
     # 运行环境： windows 和 linux
     run_env = "/" if '/data/lk' in os.getcwd() else '\\'
-    weights_path = 'models/model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth'
+    # weights_path = 'models/model/heatmap/data6_vu_b16_ad_var100_max2/lr_0.0008_3.807/best_model.pth'
+    heatmap_model_name = 'resnet50_mask0.45_e1000_var40_3.438'
+    weights_path = f'models/biye/origin_result/{heatmap_model_name}/best_model.pth'
     test_txt = './data_utils/test.txt'
-    save_root = './results/230503_'
+    save_root = f'./results/{heatmap_model_name}'
     assert os.path.exists(weights_path), f"weights {weights_path} not found."
     assert os.path.exists(test_txt), f'test.txt {test_txt} not found.'
     
@@ -64,9 +77,8 @@ def main():
     mean = (0.2281, 0.2281, 0.2281)
     std = (0.2313, 0.2313, 0.2313)
     # from pil image to tensor and normalize
-    data_transform = T.Compose([T.Resize([256]), T.ToTensor(), T.Normalize(mean=mean, std=std)])
-    test_data = YanMianDataset(os.getcwd(), transforms=data_transform, data_type='test', resize=[256, 256],
-                               num_classes=4, txt_path=test_txt)
+    test_data = YanMianDataset('../datas/yanmian', transforms=get_transform(train=False, mean=mean, std=std),
+                               data_type='test', resize=[256, 256], num_classes=4, txt_path=test_txt)
     print(len(test_data))
 
     name_index = {8: 'upper_lip', 9: 'under_lip', 10: 'upper_midpoint', 11: 'under_midpoint', 12: 'chin', 13: 'nasion'}
@@ -76,12 +88,19 @@ def main():
     spacing_cm['name'] = [i.split('.')[0] for i in spacing_cm['name']]
 
     # get devices
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(get_default_device())
     print("using {} device.".format(device))
+    init_img = torch.zeros((1, 3, 256, 256), device=device)
 
     # load heatmap model
     # model = UNet(in_channels=3, num_classes=classes + 1, base_c=64)
     model = VGG16UNet(num_classes=6)
+
+    if 'config.yml' in os.listdir(os.path.join(os.path.dirname(weights_path))):
+        with open(os.path.join(os.path.dirname(weights_path), 'config.yml'), "r") as f:
+            config = yaml.load(f.read(), Loader=yaml.Loader)
+        model = create_model(num_classes=config.num_classes, model=config.model_name)
+    # model(init_img)
 
     # load weights
     # 模型融合
@@ -142,7 +161,7 @@ def main():
         # 生成预测图
         for index in tqdm(range(len(test_data))):
             json_dir = test_data.json_list[index]
-            img_name = json_dir.split(run_env)[-1].split('_jpg')[0].split('_JPG')[0]
+            img_name = os.path.basename(json_dir).split('_jpg')[0].split('_JPG')[0]
 
             assert img_name in spacing_cm['name'], img_name + ' not in spacing_cm'
             sp_cm = spacing_cm['spa'][spacing_cm['name'].index(img_name)] * 10  # * 10为mm，否则为cm
@@ -213,7 +232,7 @@ def main():
                                                       resize_ratio=resize_ratio,  show_img=False, compute_MML=True,
                                                       spa=sp_cm, name=img_name, save_path=save_root + '/PRE')
                 gt_data, gt_img = calculate_metrics(original_img, target, not_exist_landmark=[], show_img=False,
-                                                    resize_ratio=resize_ratio, compute_MML=True, spa=sp_cm, 
+                                                    resize_ratio=resize_ratio, compute_MML=True, spa=sp_cm,
                                                     name=img_name, save_path=save_root + '/GT')
                 if img_name in ['0110062_Yue_Guo_20170822092632751', '0131720_Xinyi_Lv_20181025111452356',
                                 '0115810_Cheng_Zhang_20200909143417688', '0116840_Yongping_Dai_20210203103117950']:
@@ -239,15 +258,15 @@ def main():
                         errorkey = 'PL'
                     if key == 'FS' and (error > 1.985 or error < -2.0):
                         errorkey = 'FS'
-                    if len(errorkey) > 0:
-                        save_error_path = save_root + '/error'
-                        save_error_path_ = os.path.join(save_error_path, errorkey)
-                        if not os.path.exists(os.path.join(save_error_path, errorkey)):
-                            os.makedirs(save_error_path_)
-                        pre_img.save(os.path.join(save_error_path_, img_name + '_pre_' + str(float(error)) + '.png'))
-                        gt_img.save(os.path.join(save_error_path_, img_name + '_gt_' + str(float(error)) + '.png'))
-                        show_one_metric(original_img, pre_target, errorkey, not_exist_landmark, gt=target, spa=sp_cm,
-                                        box=box, resize_ratio=resize_ratio, save_path=f'{save_error_path_}/{img_name}.png')
+                    # if len(errorkey) > 0:
+                    #     save_error_path = save_root + '/error'
+                    #     save_error_path_ = os.path.join(save_error_path, errorkey)
+                    #     if not os.path.exists(os.path.join(save_error_path, errorkey)):
+                    #         os.makedirs(save_error_path_)
+                    #     pre_img.save(os.path.join(save_error_path_, img_name + '_pre_' + str(float(error)) + '.png'))
+                    #     gt_img.save(os.path.join(save_error_path_, img_name + '_gt_' + str(float(error)) + '.png'))
+                    #     show_one_metric(original_img, pre_target, errorkey, not_exist_landmark, gt=target, spa=sp_cm,
+                    #                     box=box, resize_ratio=resize_ratio, save_path=f'{save_error_path_}/{img_name}.png')
 
     # 评估 mse误差   var100_mse_Rightcrop最佳
     for i in mse:
@@ -267,7 +286,7 @@ def main():
         print(mean_dice)
         df = pd.DataFrame(dices)
         df.to_excel(save_root + '/dices.xlsx')
-        
+
         # output the mean and std datas of each metrics
         for i in ['IFA', 'MNM', 'FMA', 'PL', 'FS']:
             pre = result_pre[i]
@@ -295,8 +314,8 @@ def main():
             print('阳性 1  gt:', result_gt[i].count(1), '    pre: ', result_pre[i].count(1))
             print('阴性 -1  gt:', result_gt[i].count(-1), '    pre: ', result_pre[i].count(-1))
             print('0  gt:', result_gt[i].count(0), '    pre: ', result_pre[i].count(0))
-        
-        # save 
+
+        # save
         df_gt = pd.DataFrame(result_gt)
         df_gt.to_excel(save_root + '/result_gt.xlsx', index=True)
         df_pre = pd.DataFrame(result_pre)
