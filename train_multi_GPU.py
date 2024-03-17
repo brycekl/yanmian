@@ -7,45 +7,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from src import UNet, u2net, MobileV3Unet, VGG16UNet, resnet_unet, U_ConvNext, ResenetUnet
 from torch.utils.tensorboard import SummaryWriter
-from train_utils import train_one_epoch, evaluate, create_lr_scheduler, init_distributed_mode, save_on_master, mkdir
+from train_utils import (train_one_epoch, evaluate, create_lr_scheduler, init_distributed_mode, save_on_master, mkdir,
+                         create_model, same_seeds)
 from yanMianDataset import YanMianDataset
 from transforms import get_transform
 
 
-def create_model(num_classes, num_classes_2=0, in_channel=3, base_c=32, model='unet'):
-    if model == 'unet':
-        model = UNet(in_channels=in_channel, num_classes=num_classes, num_classes_2=num_classes_2, base_c=base_c)
-        print('create unet model successfully')
-    elif model in ['resnet50', 'resnet101']:
-        layer_num = int(model.split('resnet')[-1])
-        model = ResenetUnet(num_classes=num_classes, layer_num=layer_num)
-        print(f'create resnet unet {layer_num} model successfully')
-    elif model == 'convnext_unet':
-        model = U_ConvNext(img_ch=in_channel, output_ch=num_classes, channels=base_c)
-        print('create convnext unet model successfully.')
-    elif model == 'mobilev3unet':
-        model = MobileV3Unet(num_classes=num_classes)
-        print('create mobilev3unet model successfully')
-    elif model == 'vgg16unet':
-        model = VGG16UNet(num_classes=num_classes)
-        print('create vgg16unet model successfully')
-    elif model == 'u2netlite':
-        model = u2net.u2net_lite(num_classes)
-        print('create u2net lite model successfully')
-    elif model == 'u2netfull':
-        model = u2net.u2net_full(num_classes)
-        print('create u2net full model successfully')
-    elif model == 'resnet34unet':
-        model = resnet_unet.Resnet34(3, num_classes)
-        print('create resnet unet model successfully')
-
-    # model = HighResolutionNet(num_joints=num_classes, base_channel=base_c)
-    return model
-
-
 def main(args):
+    same_seeds(args.seed)
     init_distributed_mode(args)
     print(args)
 
@@ -99,7 +69,12 @@ def main(args):
     # create model num_classes equal background + foreground classes
     # output_channel = 6 if num_classes in [6, 10] else 5
     # output_channel2 = 5 if num_classes == 10 else 0
-    model = create_model(num_classes=11, num_classes_2=0, model=args.model_name, base_c=args.base_c)
+    model = create_model(num_classes=args.num_classes, num_classes_2=0, model=args.model_name, base_c=args.base_c)
+    if 'resnet' in args.model_name:
+        pretrain = torch.load(f'./PTH/{args.model_name}_spark_{args.pretrain}.pth', 'cpu')
+        model.backbone.load_state_dict(pretrain, strict=False)
+        # for p i n model.backbone.parameters():
+        #     p.requires_grad = False
     model.to(device)
 
     if args.sync_bn:
@@ -111,9 +86,15 @@ def main(args):
         model_without_ddp = model.module
 
     params_to_optimize = [p for p in model_without_ddp.parameters() if p.requires_grad]
+    if 'resnet' in args.model_name:
+        backbone_para_optimizer = {'params': [p for name, p in model_without_ddp.named_parameters()
+                                              if name.split('backbone.')[-1] in pretrain and p.requires_grad], 'lr': args.lr*0.1}
+        decoder_para_optimizer = {'params': [p for name, p in model_without_ddp.named_parameters()
+                                             if 'backbone' not in name and p.requires_grad], 'lr': args.lr}
+        params_to_optimize = [backbone_para_optimizer, decoder_para_optimizer]
 
     # optimizer = torch.optim.SGD(params_to_optimize, momentum=args.momentum, weight_decay=args.weight_decay)
-    optimizer = torch.optim.Adam(params_to_optimize, weight_decay=args.weight_decay)  # lr = 2e-4
+    optimizer = torch.optim.Adam(params_to_optimize, weight_decay=args.weight_decay, lr=args.lr)  # lr = 2e-4
     # optimizer = torch.optim.NAdam(params_to_optimize, weight_decay=args.weight_decay)
 
     scaler = torch.cuda.amp.GradScaler() if args.amp else None
@@ -150,9 +131,9 @@ def main(args):
 
     weight = 1 if num_classes == 4 or num_classes == 6 else 5
     # tensorboard writer
+    init_img = torch.zeros((1, 3, 256, 256), device=device)
     tr_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'train'))
     val_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'val'))
-    init_img = torch.zeros((1, 3, 256, 256), device=device)
     tr_writer.add_graph(model, init_img)
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -319,6 +300,8 @@ if __name__ == "__main__":
     parser.add_argument('-b', '--batch_size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--model_name', default='unet', type=str)
+    parser.add_argument('--pretrain', default='mask0.5_e1000')
+    parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--base_c', default=32, type=int)
     # 指定接着从哪个epoch数开始训练
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
@@ -346,7 +329,7 @@ if __name__ == "__main__":
     # 训练过程打印信息的频率
     parser.add_argument('--print-freq', default=1, type=int, help='print frequency')
     # 文件保存地址
-    parser.add_argument('--output_dir', default='./models/biye/origin_result/',
+    parser.add_argument('--output_dir', default='./models/biye/pretrain_mask0.5_lr_test/',
                         help='path where to save')
     # 基于上次的训练结果接着训练
     parser.add_argument('--resume', default='', help='resume from checkpoint')

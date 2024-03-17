@@ -65,6 +65,7 @@ class Bottleneck(nn.Module):
                                kernel_size=1, stride=1, bias=False)  # unsqueeze channels
         self.bn3 = nn.BatchNorm2d(out_channel*self.expansion)
         self.relu = nn.ReLU(inplace=True)
+        self.final_relu = nn.ReLU()
         self.downsample = downsample
 
     def forward(self, x):
@@ -84,7 +85,7 @@ class Bottleneck(nn.Module):
         out = self.bn3(out)
 
         out += identity
-        out = self.relu(out)
+        out = self.final_relu(out)
 
         return out
 
@@ -210,17 +211,17 @@ class ResenetUnet(nn.Module):
         lp = layer_map[layer_num]
         resnet_backbone = backbone_map[layer_num](num_classes=num_classes, include_top=False)
         self.backbone = create_feature_extractor(resnet_backbone, {"relu": "down2",
-                                                                   f"layer1.{lp[0]}.relu": "down4",
-                                                                   f"layer2.{lp[1]}.relu": "down8",
-                                                                   f"layer3.{lp[2]}.relu": "down16",
-                                                                   f"layer4.{lp[3]}.relu": "down32"})
-        self.up1 = Up(768, 256)
-        self.up2 = Up(384, 128)
-        self.up3 = Up(192, 64)
-        self.up4 = Up(128, 32)
+                                                                   f"layer1.{lp[0]}.final_relu": "down4",
+                                                                   f"layer2.{lp[1]}.final_relu": "down8",
+                                                                   f"layer3.{lp[2]}.final_relu": "down16",
+                                                                   f"layer4.{lp[3]}.final_relu": "down32"})
+        self.up1 = Up(3072, 512)
+        self.up2 = Up(1024, 256)
+        self.up3 = Up(512, 128)
+        self.up4 = Up(192, 64)
         self.up5 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-        self.double_conv = DoubleConv(32, 16)
-        self.out_conv = OutConv(16, num_classes)
+        self.double_conv = DoubleConv(64, 32)
+        self.out_conv = OutConv(32, num_classes)
         # self.down2 = IntermediateLayerGetter(self.backbone, {'relu': 'down2'})
         # self.down4 = IntermediateLayerGetter(self.backbone.layer1[-1].relu, {'relu': 'down4'})
         # self.down8 = IntermediateLayerGetter(self.backbone.layer2[-1].relu, {'relu': 'down8'})
